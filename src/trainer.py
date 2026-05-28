@@ -372,10 +372,13 @@ class Trainer:
             raise ValueError("Attention maps only available for transformer models")
 
         self.model.eval()
-        all_attn = []
-        all_features = []
-        all_labels = []
-        count = 0
+
+        # Collect a CLASS-BALANCED sample so the per-class attention plots
+        # (e.g. Top vs QCD panels) are never empty. The test loader is not
+        # shuffled, so naively taking the first n_samples can yield jets of
+        # a single class.
+        per_class = max(1, n_samples // 2)
+        buckets = {0: [], 1: []}  # label -> list of (attn_list, features)
 
         for batch in data_loader:
             features = batch["features"].to(DEVICE)
@@ -387,14 +390,25 @@ class Trainer:
 
             _, attn_maps = self.model(features, mask, pair_feats)
 
-            # Save only a few samples
-            for i in range(min(len(labels), n_samples - count)):
-                all_attn.append([a[i].cpu().numpy() for a in attn_maps])
-                all_features.append(features[i].cpu().numpy())
-                all_labels.append(labels[i].item())
-                count += 1
-                if count >= n_samples:
-                    return all_attn, all_features, all_labels
+            for i in range(len(labels)):
+                lab = int(round(labels[i].item()))
+                if lab not in buckets or len(buckets[lab]) >= per_class:
+                    continue
+                buckets[lab].append((
+                    [a[i].cpu().numpy() for a in attn_maps],
+                    features[i].cpu().numpy(),
+                ))
+
+            if len(buckets[1]) >= per_class and len(buckets[0]) >= per_class:
+                break
+
+        # Emit top jets first, then QCD, keeping labels aligned.
+        all_attn, all_features, all_labels = [], [], []
+        for lab in (1, 0):
+            for attn, feats in buckets[lab]:
+                all_attn.append(attn)
+                all_features.append(feats)
+                all_labels.append(lab)
 
         return all_attn, all_features, all_labels
 
