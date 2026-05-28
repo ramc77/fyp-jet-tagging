@@ -43,6 +43,10 @@ docs/**/*.bbl
 docs/**/*.blg
 docs/**/*.bak
 
+# ───────────── Downloaded Colab results bundle (regenerable, heavy) ─────────────
+fyp_results/
+*.zip
+
 # ───────────── OS noise ─────────────
 .DS_Store
 *.swp

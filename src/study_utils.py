@@ -95,26 +95,40 @@ def reliability_curve(labels, probs, n_bins=15):
 
 
 # ---------------------------------------------------------------- temperature scaling
-def fit_temperature(val_labels, val_logits, max_iter=200, lr=0.05):
+def fit_temperature(val_labels, val_logits, t_lo=0.05, t_hi=10.0):
     """
-    Find a single scalar T > 0 that minimises NLL of
-    sigma(logits / T) on validation data.
-    Returns T as a float.
+    Find a single scalar T > 0 that minimises the NLL of sigma(logits / T)
+    on validation data (temperature scaling, Guo et al. 2017).
+
+    Implemented as a robust bounded 1-D minimisation in float64 rather than
+    a torch LBFGS fit: the latter could diverge to NaN when the logits
+    contain very confident values (|logit| ~ 16 after the 0/1 clip), which
+    is exactly what happened for the well-separated CNN / ParticleNet
+    scores. This version is guaranteed to return a finite T in [t_lo, t_hi].
     """
-    import torch
-    t = torch.tensor([1.0], requires_grad=True)
-    lg = torch.from_numpy(np.asarray(val_logits, dtype=np.float32))
-    yt = torch.from_numpy(np.asarray(val_labels, dtype=np.float32))
-    opt = torch.optim.LBFGS([t], lr=lr, max_iter=max_iter)
+    z = np.clip(np.asarray(val_logits, dtype=np.float64), -30.0, 30.0)
+    y = np.asarray(val_labels, dtype=np.float64)
 
-    def closure():
-        opt.zero_grad()
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(lg / t.clamp(min=1e-3), yt)
-        loss.backward()
-        return loss
+    def nll(T):
+        T = max(float(T), 1e-3)
+        p = 1.0 / (1.0 + np.exp(-z / T))
+        p = np.clip(p, 1e-12, 1.0 - 1e-12)
+        return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)))
 
-    opt.step(closure)
-    return float(t.detach().clamp(min=1e-3).item())
+    T = 1.0
+    try:
+        from scipy.optimize import minimize_scalar
+        res = minimize_scalar(nll, bounds=(t_lo, t_hi), method="bounded")
+        if res.success and np.isfinite(res.x):
+            T = float(res.x)
+    except Exception:
+        # Fallback: coarse grid + local refine, no SciPy needed.
+        grid = np.linspace(t_lo, t_hi, 200)
+        T = float(grid[int(np.argmin([nll(t) for t in grid]))])
+
+    if not np.isfinite(T) or T <= 0:
+        T = 1.0
+    return T
 
 
 def logits_from_probs(probs, eps=1e-7):

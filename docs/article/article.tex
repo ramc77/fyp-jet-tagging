@@ -55,12 +55,15 @@ calibration}.  We sweep the training-set size from $5\!\times\!10^3$
 up to $5\!\times\!10^4$ jets and measure both test AUC and the
 background rejection at fixed signal efficiency.  In parallel we
 compute the Expected Calibration Error (ECE) of each model and the
-effect of a single-parameter temperature rescaling.  All four
-architectures saturate the AUC well below the dataset's $1.2\times
-10^6$ training jets, but their calibration behaviour differs
-strongly: deeper models tend to be over-confident and benefit the most
-from post-hoc rescaling.  The pipeline, models and analysis are open
-source and reproducible on a CPU laptop in under one hour.
+effect of a single-parameter temperature rescaling.  None of the
+architectures saturate within the $5\times10^4$-jet budget --- the
+graph and attention models in particular keep improving --- and their
+calibration behaviour differs strongly: the convolutional model is
+markedly over-confident (ECE $\approx0.08$) whereas the boosted tree
+and graph network are already well-calibrated (ECE $\approx0.007$).
+Ranking and calibration are thus decoupled.  The pipeline, models and
+analysis are open source and reproducible on a CPU laptop in about an
+hour (or minutes on a single GPU).
 \end{abstract}
 
 \noindent\textbf{Keywords:} jet tagging, top quark, deep learning,
@@ -99,10 +102,12 @@ Our contributions are:
           jets.
     \item A \emph{probability-calibration} analysis using reliability
           diagrams and ECE, together with a single-parameter
-          temperature rescaling.  We find that the modern attention
-          model is consistently the worst-calibrated of the four,
-          although it remains the best-ranked --- a useful warning
-          for downstream physics use.
+          temperature rescaling.  We find that ranking power and
+          calibration are decoupled: the jet-image CNN is by far the
+          worst-calibrated model (ECE $\approx0.08$) despite a
+          mid-pack ranking, while the best-ranked Particle Transformer
+          is comparatively well-calibrated --- a useful warning for
+          downstream physics use.
 \end{enumerate}
 
 % =============================================================
@@ -235,12 +240,14 @@ $5\!\times\!10^4$ training jets and a $5\!\times\!10^4$ test split.}
 \label{fig:roc}
 \end{figure}
 
-The relative ordering is the same as in the literature ---
-Particle Transformer $\gtrsim$ ParticleNet $>$ CNN $>$ BDT --- but
-the absolute AUCs are below the
-literature numbers (which used the full 1.2\,M training set).  This
-makes the data-efficiency study of \cref{sec:efficiency} all the
-more interesting.
+The relative ordering reproduces the literature ---
+Particle Transformer ($0.978$) $>$ ParticleNet ($0.976$) $>$ CNN
+($0.972$) $>$ BDT ($0.970$) --- but the absolute AUCs sit below the
+published numbers (which used the full $1.2$\,M training set).  This
+makes the data-efficiency study of \cref{sec:efficiency} all the more
+interesting.  (Headline numbers here are from a $10^5$-jet training
+run; the data-efficiency sweep of \cref{sec:efficiency} tops out at
+$5\times10^4$ and so quotes slightly lower values.)
 
 % =============================================================
 \section{Data-efficiency study}\label{sec:efficiency}
@@ -266,21 +273,23 @@ this study.}
 
 Several observations are worth noting:
 \begin{itemize}
-    \item The BDT is essentially data-efficient: it loses less than
-          a percent of AUC between $5$k and $50$k jets.  Engineered
-          features capture most of the discriminating power early
-          and do not benefit much from extra data --- a useful
-          property in low-statistics analyses.
-    \item ParticleNet and Particle Transformer continue to gain
-          significantly with more data.  Their slope on the
-          background-rejection plot is still steeply positive at
-          $5\!\times\!10^4$ jets, consistent with the literature
-          observation that they only saturate near $10^6$
+    \item The BDT is the most data-efficient model: its AUC rises
+          by under one percent (from $0.961$ to $0.968$) over the
+          whole $5$k--$50$k range.  Engineered features capture most
+          of the discriminating power early and benefit little from
+          extra data --- a useful property in low-statistics
+          analyses.
+    \item The deep models show the opposite behaviour and a clear
+          \emph{crossover}: the Particle Transformer is the
+          \emph{weakest} model at $5$k jets ($0.949$) but the
+          \emph{strongest} at $50$k ($0.974$), overtaking both the
+          BDT and ParticleNet.  Its slope is still steeply positive
+          at the top of our range, consistent with the literature
+          observation that it only saturates near $10^6$
           jets~\cite{partformer}.
-    \item The CNN's plateau is intermediate: it picks up some of
-          the structural information that the BDT misses but lacks
-          the permutation-equivariant treatment of constituents
-          that the graph and attention models have.
+    \item The CNN is intermediate: it gains substantially with data
+          ($0.947\!\to\!0.968$) but plateaus earlier than the
+          permutation-equivariant graph and attention models.
 \end{itemize}
 
 % =============================================================
@@ -310,15 +319,43 @@ logits, and report ECE before and after applying $T$.
 on the test set.  Solid markers are raw scores; dotted markers show
 the temperature-rescaled scores ($T$ fitted on the val split).
 \emph{Bottom row:} corresponding score histograms (signal red, QCD
-blue).  The Particle Transformer has the highest AUC but the
-worst raw calibration, and gains the most from temperature scaling.}
+blue).  The jet-image CNN is markedly over-confident
+(ECE $=0.078$, $T=1.54$); the BDT and ParticleNet are already
+well-calibrated (ECE $\approx0.007$).}
 \label{fig:cal}
 \end{figure}
 
-The temperature scaling produces a single-parameter improvement that
-brings all four models within $\text{ECE}\!\lesssim\!0.01$ on this
-benchmark.  We recommend reporting temperature-scaled probabilities
-as the default in any downstream physics use of these models.
+Three points stand out (\cref{tab:calibration}):
+\begin{itemize}
+    \item All four fitted temperatures satisfy $T>1$, i.e.\ every
+          model is mildly \emph{over-confident}; the CNN most so
+          ($T=1.54$).
+    \item Ranking and calibration are decoupled.  The CNN, which
+          ranks third on AUC, is by an order of magnitude the
+          worst-calibrated (ECE $=0.078$ vs.\ $0.007$--$0.012$ for
+          the others).  The top-ranked Particle Transformer is
+          comparatively well-calibrated.
+    \item Temperature scaling helps every model and brings the BDT,
+          ParticleNet and Particle Transformer to
+          $\text{ECE}\!\lesssim\!0.008$.  It only \emph{halves} the
+          CNN's error (to $0.064$), which remains large --- the
+          CNN's mis-calibration is not a pure temperature effect and
+          would need a richer (e.g.\ isotonic) recalibration.
+\end{itemize}
+We recommend reporting temperature-scaled probabilities as the
+default in any downstream physics use of these models, and treating
+the CNN's scores with particular caution.
+
+\begin{table}[t]
+\centering
+\caption{Test-set calibration at the $5\times10^4$-jet study endpoint.
+$T$ is the temperature fitted on the validation split; ECE$_{T}$ is the
+Expected Calibration Error after rescaling.}
+\label{tab:calibration}
+\IfFileExists{../../results/calibration_table.tex}
+  {\input{../../results/calibration_table.tex}}
+  {\emph{(generated by \texttt{run\_study.py})}}
+\end{table}
 
 % =============================================================
 \section{Transformer interpretability}\label{sec:attention}
@@ -327,11 +364,14 @@ The Particle Transformer's \texttt{[CLS]} attention provides a
 natural interpretability handle.  \Cref{fig:attn-cls} shows the
 last-layer attention weight from the \texttt{[CLS]} token to each
 constituent, plotted against the constituent's $\Delta R$ to the
-jet axis.  For top jets, the attention picks out two and sometimes
-three peaks at $\Delta R\!\sim\!0.2$ and $\Delta R\!\sim\!0.6$,
-matching the subjet structure of the $W\!\to\!qq$ and $b$ branches.
-For QCD jets the attention is concentrated near the jet axis,
-consistent with a single dominant prong.
+jet axis.  For QCD jets the attention is concentrated at small
+$\Delta R\!\lesssim\!1$, consistent with a single dominant prong.
+For top jets the attention is distributed over a much wider
+$\Delta R$ range, extending out to $\Delta R\!\sim\!3$--$4$, which
+reflects the broader, multi-pronged energy flow of the
+$t\!\to\!Wb\!\to\!(q\bar q)b$ decay.  The model thus learns to
+attend to peripheral radiation that carries the top-decay signature
+rather than only the jet core.
 
 \begin{figure}[t]
 \centering
@@ -355,10 +395,11 @@ Two practical messages stand out:
           statistics should expect a multi-percent AUC penalty
           relative to the published full-dataset numbers.
     \item Calibration is a separate problem from ranking.  The
-          best-ranking model (Particle Transformer) is the
-          \emph{worst}-calibrated, and a single-parameter temperature
-          rescaling on the validation set fixes most of the deficit
-          essentially for free.
+          worst-calibrated model here is the jet-image CNN, not the
+          top-ranked Particle Transformer, and the CNN's deficit
+          survives a single-parameter temperature rescaling --- a
+          reminder that a high AUC says nothing about whether the
+          score can be read as a probability.
 \end{itemize}
 
 Natural extensions are: (i) extending the sweep onto the full

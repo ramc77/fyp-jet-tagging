@@ -79,11 +79,16 @@ of each model is evaluated using reliability diagrams and the
 Expected Calibration Error, and a single-parameter temperature
 rescaling is fitted on the validation set as a simple corrective.
 The BDT is found to be markedly data-efficient at the expense of
-absolute discriminating power, while the modern attention model
-saturates only slowly with $N_{\text{train}}$ and is the
-worst-calibrated of the four before temperature scaling.  All
-results are reproducible on a single CPU laptop in under one hour
-using the open-source pipeline released with this thesis.
+absolute discriminating power, while the graph and attention models
+keep improving with $N_{\text{train}}$ --- the Particle Transformer
+in particular climbs from the weakest model at $5\times10^3$ jets to
+the strongest at $5\times10^4$.  Ranking and calibration prove to be
+decoupled: the jet-image CNN is by far the worst-calibrated model
+(ECE $\approx0.08$) despite a mid-pack ranking, whereas the boosted
+tree and graph network are already well-calibrated
+(ECE $\approx0.007$).  All results are reproducible on a single CPU
+laptop in about an hour (minutes on a GPU) using the open-source
+pipeline released with this thesis.
 
 % ----------------- acknowledgements
 \chapter*{Acknowledgements}
@@ -532,19 +537,22 @@ bootstrap.}
 
 \paragraph{Findings.}
 \begin{itemize}
-    \item The BDT is by far the most data-efficient: it gains less
-          than half a percent of AUC between $5$\,k and $50$\,k
-          jets.  Engineered features short-circuit much of what the
-          deep models have to learn from scratch.
-    \item ParticleNet and the Particle Transformer continue to gain
-          measurably with $N_{\text{train}}$ all the way to
-          $5\!\times\!10^4$ jets.  Their slope on the rejection plot
-          is positive at the largest size we tested, consistent
-          with the literature observation that they only saturate
-          near $10^6$ jets~\cite{partformer}.
-    \item The CNN's curve is intermediate: it benefits from extra
-          data but plateaus earlier than the permutation-equivariant
-          architectures.
+    \item The BDT is by far the most data-efficient: its AUC rises
+          by under one percent (from $0.961$ to $0.968$) across the
+          entire $5$\,k--$50$\,k range.  Engineered features
+          short-circuit much of what the deep models must learn from
+          scratch.
+    \item ParticleNet and the Particle Transformer gain strongly
+          with $N_{\text{train}}$, producing a clear \emph{crossover}:
+          the Particle Transformer is the weakest model at $5$\,k
+          jets ($\text{AUC}=0.949$) but the strongest at $5\times10^4$
+          ($0.974$), overtaking both the BDT and ParticleNet.  Their
+          slope is still positive at the largest size tested,
+          consistent with the literature observation that they only
+          saturate near $10^6$ jets~\cite{partformer}.
+    \item The CNN is intermediate: it benefits substantially from
+          extra data ($0.947\!\to\!0.968$) but plateaus earlier than
+          the permutation-equivariant architectures.
 \end{itemize}
 
 \section{Probability calibration}
@@ -565,18 +573,26 @@ scores; dotted markers are after temperature rescaling.}
 
 \paragraph{Findings.}
 \begin{itemize}
-    \item The BDT is essentially well-calibrated already, with an
-          ECE below $0.01$.  This reflects the fact that XGBoost
-          minimises a proper scoring rule (log-loss) directly on the
-          probability.
-    \item The neural models are systematically more over-confident,
-          and the Particle Transformer is the worst-calibrated of
-          the four.  This is consistent with the original
-          observation of Guo \emph{et al.}~\cite{guo2017}: deeper
-          models tend to over-confidence.
-    \item A single scalar $T$, fit on the validation set, brings
-          all models within ECE\,$\lesssim\!0.01$ on the test set,
-          at zero training-data cost.
+    \item The BDT and ParticleNet are essentially well-calibrated
+          already, with ECE $\approx0.007$.  For the BDT this
+          reflects the fact that XGBoost minimises a proper scoring
+          rule (log-loss) directly on the probability.
+    \item Every model is mildly over-confident (all fitted
+          temperatures satisfy $T>1$), but the degree differs
+          enormously.  The jet-image CNN is the worst-calibrated by
+          an order of magnitude (ECE $=0.078$, $T=1.54$), even though
+          it ranks only third on AUC.  The top-ranked Particle
+          Transformer is comparatively well-calibrated
+          (ECE $=0.012$).  Ranking power and calibration are thus
+          \emph{decoupled} --- a high AUC does not imply trustworthy
+          probabilities.
+    \item A single scalar $T$, fit on the validation set, brings the
+          BDT, ParticleNet and Particle Transformer to
+          ECE\,$\lesssim\!0.008$ at zero training-data cost.  It only
+          \emph{halves} the CNN's error (to $0.064$), which remains
+          large: the CNN's mis-calibration is not a pure temperature
+          effect and would require a richer (e.g.\ isotonic)
+          recalibration.
 \end{itemize}
 
 \section{Summary table of calibration}
@@ -627,10 +643,14 @@ open question that this thesis does not address.
 \section{Implications for analysis use}
 The most concrete recommendation from the calibration analysis is
 that downstream physics use of any of these models should pass the
-score through a temperature rescaling fit on a held-out sample.
-The cost is one scalar parameter; the benefit is bringing the ECE
-below the $1\%$ level on which most likelihood-based limit setters
-would otherwise systematically mis-cover.
+score through a temperature rescaling fit on a held-out sample: for
+the boosted tree, graph network and transformer this single scalar
+brings the ECE below the $1\%$ level on which most likelihood-based
+limit setters would otherwise systematically mis-cover.  The
+jet-image CNN is a cautionary exception --- temperature scaling only
+halves its ECE (to $\approx0.06$), so a richer recalibration (e.g.\
+isotonic regression) would be needed before its scores could be used
+as probabilities.
 
 \section{Future work}
 A natural next step is to extend the data-efficiency sweep up to
@@ -653,16 +673,21 @@ actually needs to reach its plateau, and how well-calibrated its
 output probabilities are.
 
 The data-efficiency sweep shows a clear separation between the
-classical BDT --- which is essentially data-efficient at the cost
-of a couple of percent of AUC --- and the modern permutation-
-equivariant models, which continue to gain measurably with extra
-data up to and beyond the budget of this study.
+classical BDT --- which is the most data-efficient model and indeed
+the best at the smallest training size --- and the modern
+permutation-equivariant models, which start weaker but continue to
+gain measurably with extra data, overtaking the BDT and producing a
+visible crossover by $5\times10^4$ jets.
 
-The calibration study shows that the Particle Transformer,
-although the highest-AUC model considered, is also the
-worst-calibrated, but that a single-parameter temperature
-rescaling on the validation set restores calibration essentially
-for free.
+The calibration study shows that ranking power and calibration are
+decoupled: the highest-AUC model (the Particle Transformer) is
+comparatively well-calibrated, whereas the jet-image CNN --- only
+third on AUC --- is the worst-calibrated by an order of magnitude.
+A single-parameter temperature rescaling on the validation set
+restores good calibration for the boosted tree, graph network and
+transformer essentially for free, but only partially corrects the
+CNN, whose mis-calibration is structural rather than a pure
+temperature offset.
 
 % ================================ BIBLIOGRAPHY
 \begin{thebibliography}{99}
