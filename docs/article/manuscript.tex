@@ -91,46 +91,87 @@ Particle Transformer \sep data efficiency \sep probability calibration
 \section{Introduction}
 \label{sec:intro}
 
-A boosted hadronically decaying top quark,
-$t\rightarrow Wb\rightarrow q\bar{q}'b$, deposits all three of its decay
-quarks inside a single large-radius jet that carries a characteristic
-three-pronged energy pattern and a mass near $m_t\simeq172.76$\,GeV
-\citep{pdg2022}. Separating these ``top jets'' from the vastly more common
-jets initiated by light quarks and gluons (QCD jets) --- \emph{top tagging}
---- is one of the canonical classification problems of LHC physics and a
-proving ground for machine learning on high-dimensional particle data
+\subsection{Physics context}
+The top quark is the heaviest known elementary particle, with a mass
+$m_t\simeq172.76$\,GeV \citep{pdg2022}. Because this mass exceeds the
+hadronisation scale, the top decays as a bare quark, almost always through
+$t\rightarrow Wb$; in the fully hadronic channel the $W$ decays as
+$W\rightarrow q\bar{q}'$, giving $t\rightarrow Wb\rightarrow q\bar{q}'b$. When
+the parent top carries a transverse momentum $p_T\gg m_t$ it is
+\emph{boosted}: its three decay quarks are produced collinearly and, after
+parton showering and hadronisation, merge into one large-radius jet
+reconstructed by sequential-recombination algorithms such as anti-$k_t$
+\citep{cacciari2008,cacciari2012fastjet,salam2010}. Such a ``top jet'' differs
+from an ordinary jet initiated by a light quark or gluon (a QCD jet) in three
+measurable ways: it is more massive (mass $\sim m_t$), it shows a
+three-pronged rather than one-pronged radiation pattern, and it carries a
+higher constituent multiplicity. Exploiting these differences to separate top
+jets from the overwhelmingly more abundant QCD background --- \emph{top
+tagging} --- is one of the canonical classification problems of LHC physics
+and a central tool in searches for physics beyond the Standard Model
 \citep{larkoski2020,kogler2019}.
 
-The state of the art is well established. Engineered observables such as the
-jet mass, $N$-subjettiness \citep{thaler2011} and energy-correlation
-functions \citep{larkoski2013} fed to boosted decision trees gave way to deep
-models acting directly on the constituents: convolutional networks on jet
-images \citep{deoliveira2016,komiske2017}, the ParticleNet graph network
-\citep{qu2020particlenet}, and the attention-based Particle Transformer
-\citep{qu2022particletransformer}. On the standard reference dataset
-\citep{kasieczka2019dataset} a community comparison
-\citep{kasieczka2019landscape} established the now-canonical ordering with
-AUC values above $0.98$.
+\subsection{From engineered features to deep learning}
+Classical taggers compress the jet into a handful of physically motivated
+\emph{substructure observables}: the jet mass, the $N$-subjettiness ratios
+$\tau_{21},\tau_{32}$ \citep{thaler2011}, and energy-correlation functions
+such as $C_2$ and $D_2$ \citep{larkoski2013,larkoski2014}. Fed to a
+boosted decision tree (BDT), these provide a strong, interpretable baseline.
+The deep-learning era replaced hand-crafted features with representations
+learned directly from the constituents. Three paradigms followed in
+succession: pixelating the jet into a calorimeter-like image for a
+convolutional neural network (CNN) \citep{deoliveira2016,komiske2017};
+treating the jet as an unordered ``particle cloud'' processed by a
+permutation-invariant graph network such as ParticleNet
+\citep{qu2020particlenet}, built on the Dynamic Graph CNN \citep{wang2019dgcnn};
+and, most recently, modelling pairwise constituent interactions with
+self-attention in the Particle Transformer
+\citep{qu2022particletransformer,vaswani2017attention}. Related set, graph and
+Lorentz-equivariant architectures continue to advance the field
+\citep{komiske2019efn,moreno2020jedinet,bogatskiy2020lorentz,gong2022lorentznet}.
+On the standard reference dataset \citep{kasieczka2019dataset}, a community
+comparison \citep{kasieczka2019landscape} established the now-canonical
+ordering, with the leading deep models exceeding an area under the receiver
+operating characteristic curve (AUC) of $0.98$.
 
-What this literature rarely reports is the \emph{cost} of those headline
-numbers --- how much training data each architecture needs --- and the
-\emph{calibration} of the scores, i.e.\ whether they can be read as
-probabilities in a downstream likelihood fit. Generating labelled Monte-Carlo
-samples is computationally expensive, and a high AUC certifies only that a
-model \emph{ranks} signal above background, not that its score is a
-trustworthy probability. This paper addresses both questions on the public
-reference dataset using a single reproducible pipeline that runs on free
-hardware. Our contributions are:
+\subsection{Motivation and contributions}
+The published literature is almost entirely concerned with the \emph{best
+achievable} discrimination, quoted at the full training-set size of
+$1.2\times10^{6}$ jets and on large GPU clusters. Two properties of direct
+practical importance are rarely studied together. The first is \emph{data
+efficiency}: generating labelled Monte-Carlo training samples is
+computationally expensive, so how steeply each architecture's performance
+depends on the amount of training data --- and whether the ranking of the
+models changes in the small-data regime --- is decisive for groups without
+large simulation budgets. The second is \emph{probability calibration}: a high
+AUC certifies only that a model \emph{ranks} signal above background, whereas
+many downstream analyses use the classifier score as a \emph{probability}
+(for instance in a profile-likelihood fit), which requires the score to be
+calibrated. While calibration is routinely examined in the machine-learning
+literature \citep{guo2017calibration,niculescu2005calibration}, it is seldom
+reported for jet taggers.
+
+This paper addresses both questions on the public reference dataset using a
+single, reproducible pipeline that runs end-to-end on free hardware. Our
+contributions are:
 \begin{enumerate}
     \item a unified, open-source pipeline that trains and evaluates the BDT,
     CNN, ParticleNet and Particle Transformer under identical preprocessing,
-    splits and seeds;
-    \item a data-efficiency study across a decade of training-set sizes,
-    revealing a crossover between the BDT and the deep models; and
-    \item a probability-calibration study showing that ranking and
-    calibration are decoupled, with practical recommendations for downstream
-    use.
+    data splits and random seeds;
+    \item a data-efficiency study across a decade of training-set sizes
+    ($5\times10^{3}$ to $5\times10^{4}$ jets), revealing a clear crossover
+    between the BDT and the deep models; and
+    \item a probability-calibration study, using reliability diagrams, the
+    Expected Calibration Error and temperature scaling, showing that ranking
+    power and calibration are decoupled, with practical recommendations for
+    downstream use.
 \end{enumerate}
+The remainder of the paper is organised as follows.
+Section~\ref{sec:data} describes the dataset and preprocessing;
+Section~\ref{sec:methodology} sets out the four models and the evaluation
+methodology with their governing equations; Section~\ref{sec:results}
+presents the headline benchmark, the data-efficiency sweep and the
+calibration analysis; and Section~\ref{sec:conclusions} concludes.
 
 %% =====================================================================
 \section{Dataset and preprocessing}
@@ -178,27 +219,148 @@ their difference (right).}
 \end{figure}
 
 %% =====================================================================
-\section{Models and training}
-\label{sec:models}
+\section{Methodology}
+\label{sec:methodology}
 
-The four models are: (i) a \textsc{XGBoost} BDT \citep{chen2016xgboost} on the
-thirteen engineered features; (ii) a ResNet-style CNN \citep{he2016resnet} on
-the jet images; (iii) ParticleNet \citep{qu2020particlenet}, an EdgeConv graph
-network \citep{wang2019dgcnn} on the permutation-invariant particle cloud; and
-(iv) the Particle Transformer \citep{qu2022particletransformer,
-vaswani2017attention} with pairwise-feature attention bias. Related set,
-graph and equivariant approaches \citep{komiske2019efn,moreno2020jedinet,
-bogatskiy2020lorentz,gong2022lorentznet} place these in context.
+We treat top tagging as binary classification: each jet $\mathbf{x}$ is mapped
+by a model $f_\theta$ to a score $\hat{y}=f_\theta(\mathbf{x})\in[0,1]$
+estimating the probability that the jet is a top jet. All four models are
+trained against the binary cross-entropy loss
+\begin{equation}
+\mathcal{L}(\theta) = -\frac{1}{N}\sum_{i=1}^{N}
+\Bigl[\, y_i\log\hat{y}_i + (1-y_i)\log(1-\hat{y}_i) \,\Bigr],
+\label{eq:bce}
+\end{equation}
+where $y_i\in\{0,1\}$ is the truth label and the neural models produce
+$\hat{y}_i=\sigma(z_i)$ from a logit $z_i$ through the logistic sigmoid
+$\sigma(z)=1/(1+e^{-z})$.
 
-Deep models minimise binary cross-entropy with Adam/AdamW
-\citep{kingma2014adam,loshchilov2019adamw}, gradient clipping, a plateau
-scheduler and early stopping on validation AUC, implemented in \textsc{PyTorch}
-\citep{paszke2019pytorch} with \textsc{NumPy} \citep{harris2020numpy},
-\textsc{scikit-learn} \citep{pedregosa2011scikit} and \textsc{Matplotlib}
+\subsection{Boosted decision tree (BDT)}
+\label{sec:bdt}
+The baseline is a gradient-boosted decision-tree ensemble trained with
+\textsc{XGBoost} \citep{chen2016xgboost} on the thirteen engineered
+observables. The prediction is an additive ensemble of $K$ regression trees
+$f_k\in\mathcal{F}$,
+\begin{equation}
+z_i = \sum_{k=1}^{K} f_k(\mathbf{x}_i),
+\label{eq:bdt-ensemble}
+\end{equation}
+built greedily by minimising the regularised objective
+\begin{equation}
+\mathcal{O} = \sum_{i} \ell(y_i,\hat{y}_i)
+            + \sum_{k}\Omega(f_k), \qquad
+\Omega(f) = \gamma\,T + \tfrac{1}{2}\lambda\lVert\mathbf{w}\rVert^{2},
+\label{eq:xgb-obj}
+\end{equation}
+where $\ell$ is the logistic loss, $T$ is the number of leaves, $\mathbf{w}$
+the leaf weights, and $\gamma,\lambda$ control complexity. At each boosting
+round a new tree is fit to the second-order Taylor expansion of $\mathcal{O}$,
+which yields fast, accurate splits. Among the inputs, the $N$-subjettiness
+ratios \citep{thaler2011}
+\begin{equation}
+\tau_N = \frac{1}{d_0}\sum_{k} p_{T,k}\,
+\min\bigl(\Delta R_{1,k},\dots,\Delta R_{N,k}\bigr), \qquad
+\tau_{21}=\frac{\tau_2}{\tau_1},\;\; \tau_{32}=\frac{\tau_3}{\tau_2},
+\label{eq:nsub}
+\end{equation}
+($d_0=\sum_k p_{T,k}R_0$, $\Delta R_{a,k}$ the angular distance from
+constituent $k$ to axis $a$) measure compatibility with an $N$-pronged
+hypothesis and are, with the jet mass, the most discriminating features.
+
+\subsection{Convolutional neural network (CNN)}
+\label{sec:cnn}
+The CNN acts on the $40\times40\times3$ jet image $I$, applying learnable
+kernels $W$ in the $(\Delta\eta,\Delta\phi)$ plane,
+\begin{equation}
+(I * W)_{ij}^{c'} = \sum_{c}\sum_{a,b} W^{c',c}_{a,b}\,
+I^{c}_{\,i+a,\,j+b},
+\label{eq:conv}
+\end{equation}
+interleaved with batch normalisation and ReLU nonlinearities
+$\mathrm{ReLU}(u)=\max(0,u)$. We use a ResNet-style stack
+\citep{he2016resnet} in which each block learns a residual mapping
+\begin{equation}
+\mathbf{h}_{\ell+1} = \mathrm{ReLU}\bigl(\mathbf{h}_\ell
++ \mathcal{F}(\mathbf{h}_\ell;W_\ell)\bigr),
+\label{eq:resnet}
+\end{equation}
+easing optimisation of deeper networks. Global average pooling and a
+fully connected head produce the logit $z$.
+
+\subsection{ParticleNet (graph network)}
+\label{sec:particlenet}
+ParticleNet \citep{qu2020particlenet} treats the jet as an unordered point
+cloud $\{\mathbf{x}_i\}$ and is built from EdgeConv blocks
+\citep{wang2019dgcnn}. For each particle $i$, a $k$-nearest-neighbour graph is
+constructed in coordinate space and the feature is updated by a symmetric
+aggregation over its neighbourhood $\mathcal{N}(i)$,
+\begin{equation}
+\mathbf{x}_i' = \operatorname*{max}_{j\in\mathcal{N}(i)}\;
+h_\Theta\!\bigl(\mathbf{x}_i,\;\mathbf{x}_j-\mathbf{x}_i\bigr),
+\label{eq:edgeconv}
+\end{equation}
+where $h_\Theta$ is a shared multilayer perceptron and the element-wise
+$\max$ makes the operation permutation-invariant. The graph is recomputed in
+the learned feature space at each block (a ``dynamic'' graph), so successive
+layers capture progressively larger-scale structure; a final global pooling
+and dense head give $z$.
+
+\subsection{Particle Transformer}
+\label{sec:part}
+The Particle Transformer \citep{qu2022particletransformer} applies multi-head
+self-attention \citep{vaswani2017attention} to the constituent sequence. With
+queries, keys and values $Q,K,V$ obtained by linear projection, a standard
+attention head computes
+\begin{equation}
+\mathrm{Attention}(Q,K,V) =
+\mathrm{softmax}\!\left(\frac{QK^{\top}}{\sqrt{d_k}}\right)V,
+\label{eq:attention}
+\end{equation}
+with $d_k$ the key dimension. The key physics ingredient is a learned
+\emph{interaction bias}: the four pairwise features
+$\mathbf{u}_{ij}=(\ln\Delta R_{ij},\ln k_{T,ij},z_{ij},\Delta\eta_{ij})$ are
+mapped by an MLP to a per-head additive term $U_{ij}=\phi(\mathbf{u}_{ij})$
+that is injected into the attention logits,
+\begin{equation}
+A = \mathrm{softmax}\!\left(\frac{QK^{\top}}{\sqrt{d_k}} + U\right)V,
+\label{eq:part-attention}
+\end{equation}
+so that physically close, hard splittings are emphasised. A learnable class
+token aggregates the sequence and its representation is mapped to the logit
+$z$; its attention weights provide an interpretability handle
+(Section~\ref{sec:results}).
+
+\subsection{Training}
+\label{sec:training}
+The neural models minimise Eq.~\eqref{eq:bce} with Adam/AdamW
+\citep{kingma2014adam,loshchilov2019adamw} (learning rates $10^{-3}$--$10^{-4}$),
+gradient clipping, a plateau learning-rate scheduler and early stopping on the
+validation AUC, implemented in \textsc{PyTorch} \citep{paszke2019pytorch} with
+\textsc{NumPy} \citep{harris2020numpy}, \textsc{scikit-learn}
+\citep{pedregosa2011scikit} and \textsc{Matplotlib}
 \citep{hunter2007matplotlib}. Training used a free Google Colaboratory T4 GPU;
-the pipeline checkpoints every epoch and resumes automatically. We report AUC,
-accuracy, and background rejection $1/\varepsilon_B$ at signal efficiencies
-$\varepsilon_S=0.5,0.3$, with bootstrap uncertainties.
+the pipeline checkpoints every epoch and resumes automatically.
+
+\subsection{Evaluation metrics}
+\label{sec:metrics}
+We report the AUC, the accuracy at a score threshold of $0.5$, and the
+background rejection $1/\varepsilon_B$ at fixed signal efficiencies
+$\varepsilon_S=0.5,0.3$, the figure of merit most relevant to physics
+analyses; AUC uncertainties are obtained by bootstrap resampling of the test
+set. Calibration is quantified by the Expected Calibration Error
+\citep{guo2017calibration}, which partitions the predictions into $M$
+equal-width score bins $B_m$ and averages the gap between confidence and
+accuracy,
+\begin{equation}
+\mathrm{ECE} = \sum_{m=1}^{M}\frac{|B_m|}{N}\,
+\bigl|\,\mathrm{acc}(B_m)-\mathrm{conf}(B_m)\,\bigr|.
+\label{eq:ece}
+\end{equation}
+As a corrective we apply \emph{temperature scaling}: a single scalar $T>0$ is
+fit on the validation set by minimising the negative log-likelihood of the
+rescaled scores $\hat{y}=\sigma(z/T)$, and we report the ECE before and after
+rescaling. $T>1$ indicates an over-confident model whose probabilities are
+softened by the rescaling.
 
 %% =====================================================================
 \section{Results}
