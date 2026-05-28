@@ -676,20 +676,35 @@ def print_summary_table(results_dict):
 
 
 def generate_latex_table(data):
-    """Generate a LaTeX table for the thesis."""
+    """Generate a compact LaTeX table (fits a narrow thesis text width)."""
+    def _fmt_params(p):
+        """Compact parameter count: ints -> '1.26M'/'366k', else as-is."""
+        if isinstance(p, int):
+            if p >= 1_000_000:
+                return f"{p/1e6:.2f}M"
+            if p >= 1_000:
+                return f"{p/1e3:.0f}k"
+            return str(p)
+        return str(p)
+
     lines = [
         r"\begin{table}[htbp]",
         r"\centering",
-        r"\caption{Comparison of jet classification models on the Top Quark Tagging benchmark dataset.}",
+        r"\small",
+        r"\setlength{\tabcolsep}{5pt}",
+        r"\caption{Comparison of jet-classification models on the Top-Quark "
+        r"Tagging benchmark. $R_{50}$ and $R_{30}$ are the background "
+        r"rejections $1/\varepsilon_B$ at signal efficiencies "
+        r"$\varepsilon_S=0.5$ and $0.3$.}",
         r"\label{tab:model_comparison}",
-        r"\begin{tabular}{lcccccc}",
+        r"\begin{tabular}{lccccc}",
         r"\hline\hline",
-        r"Model & AUC-ROC & Accuracy & $1/\varepsilon_B$ @ $\varepsilon_S=50\%$ & $1/\varepsilon_B$ @ $\varepsilon_S=30\%$ & Parameters \\",
+        r"Model & AUC & Acc. & $R_{50}$ & $R_{30}$ & Params \\",
         r"\hline",
     ]
 
     for row in data:
-        params_str = f"{row['n_params']:,}" if isinstance(row['n_params'], int) else str(row['n_params'])
+        params_str = _fmt_params(row["n_params"])
         lines.append(
             f"{row['model']} & {row['auc']:.4f} & {row['accuracy']:.4f} "
             f"& {row['bg_rej_50']:.0f} & {row['bg_rej_30']:.0f} & {params_str} \\\\"

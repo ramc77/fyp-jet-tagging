@@ -18,14 +18,14 @@ Dataset~\citep{kasieczka2019dataset}, available from Zenodo
 
 On a machine with Python~3.11 the headline results and study are reproduced
 with:
-\begin{verbatim}
+{\small\begin{verbatim}
 python3 -m venv particle_venv
 source particle_venv/bin/activate
 pip install -r requirements.txt
-python3 download_data.py --yes        # fetch the dataset
-python3 run_full_pipeline.py          # train + evaluate all four models
-python3 run_study.py                  # data-efficiency + calibration sweep
-\end{verbatim}
+python3 download_data.py --yes      # fetch the dataset
+python3 run_full_pipeline.py        # train + evaluate models
+python3 run_study.py                # data-efficiency + calibration
+\end{verbatim}}
 A Google Colaboratory notebook (\texttt{notebooks/FYP\_Colab.ipynb}) runs the
 same pipeline on a free T4 GPU and downloads the results. Every training stage
 checkpoints after each epoch and resumes automatically, so a run may be

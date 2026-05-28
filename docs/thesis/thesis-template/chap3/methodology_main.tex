@@ -34,9 +34,13 @@ models use the leading $100$ constituents per jet, ordered by $p_T$.
 From each constituent four-momentum $(E,p_x,p_y,p_z)$ we compute the
 transverse momentum $p_T$, pseudorapidity $\eta$ and azimuth $\phi$, and the
 coordinates relative to the $p_T$-weighted jet axis,
-$(\Delta\eta,\Delta\phi)$. The seven-dimensional feature vector
-$(p_T,\eta,\phi,E,\Delta\eta,\Delta\phi,\log p_T)$ is standardised
-feature-wise using statistics computed on the training split only.
+$(\Delta\eta,\Delta\phi)$. The resulting seven-dimensional per-constituent
+feature vector
+\begin{equation}
+\mathbf{x}=\bigl(p_T,\;\eta,\;\phi,\;E,\;\Delta\eta,\;\Delta\phi,\;\log p_T\bigr)
+\end{equation}
+is standardised feature-wise using statistics computed on the training split
+only.
 
 \subsection{Engineered jet-level features (for the BDT)}
 For the BDT baseline we compute thirteen high-level observables: the jet

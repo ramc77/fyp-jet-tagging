@@ -288,12 +288,14 @@
 %%\newcolumntype{L}{>{\arraybackslash}m{2.5in}}
 \bgroup
 \def\arraystretch{1.2}%
-\begin{tabular}{ll}
+% Second column is a wrapping paragraph column so that long titles /
+% multi-author candidate lists do not overflow the page width.
+\begin{tabular}{l p{0.62\textwidth}}
 {\bfseries Department} & \@department \\
 {\bfseries Program} & \@ifundefined{@program}{\@degree}{\@program} \\
 {\bfseries Degree} & \@degree \\
-{\bfseries Title}  & \removelinebreaks{\@title} \\	
-{\bfseries Candidate \@ifundefined{@authorID}{}{(ID)}} & \@author\ \@ifundefined{@authorID}{}{(\@enrollment)} \\[0.7in]	
+{\bfseries Title}  & \removelinebreaks{\@title} \\
+{\bfseries Candidate \@ifundefined{@authorID}{}{(ID)}} & \@author\ \@ifundefined{@authorID}{}{(\@enrollment)} \\[0.7in]
 {\bfseries Signature of Candidate} & \makebox[2in]{\hrulefill} \\
 {\bfseries Date} & \today \\
 \end{tabular}\\[1cm]
