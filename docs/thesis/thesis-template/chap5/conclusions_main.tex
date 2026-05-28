@@ -1,0 +1,78 @@
+\chapter{Conclusions and Future Work}
+\label{chap:conclusions}
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+This thesis built a transparent, reproducible top-tagging pipeline and used
+it to compare four classifiers --- a boosted decision tree on engineered
+features, a jet-image CNN, the ParticleNet graph network and the Particle
+Transformer --- on the public 14\,TeV Top-Quark Tagging Reference Dataset,
+with a focus on data efficiency and probability calibration rather than on a
+new record. Returning to the objectives of
+Chapter~\ref{chap:introduction}, the study reached the following
+conclusions.
+
+\begin{enumerate}
+    \item \textbf{The established ordering is reproduced.} Under identical
+    preprocessing and a modest budget, the Particle Transformer is best
+    (AUC $=0.978$, $1/\varepsilon_B\approx136$ at $\varepsilon_S=0.5$),
+    followed by ParticleNet, the CNN and the BDT, matching the community
+    benchmark.
+    \item \textbf{Data efficiency separates the models.} The BDT is the most
+    data-efficient and is the strongest model at the smallest training size,
+    but it is overtaken by the deep models as data grows. The Particle
+    Transformer in particular rises from the weakest model at $5\times10^{3}$
+    jets to the strongest at $5\times10^{4}$, a clear crossover with direct
+    practical implications for low-statistics analyses.
+    \item \textbf{Ranking and calibration are decoupled.} The highest-AUC
+    model (the Particle Transformer) is comparatively well-calibrated,
+    whereas the jet-image CNN --- only third on AUC --- is the
+    worst-calibrated by an order of magnitude. A single-parameter temperature
+    rescaling restores good calibration for the BDT, ParticleNet and the
+    transformer, but only partially corrects the CNN. A high AUC therefore
+    does not by itself license the use of a model's score as a probability.
+    \item \textbf{World-class benchmarks are reproducible on free hardware.}
+    The entire study was run on a free cloud GPU using open data and open
+    tools, with automatic checkpointing and resumption, demonstrating that
+    such work is accessible to students in resource-constrained settings.
+\end{enumerate}
+
+\section{Limitations}
+\label{sec:limitations}
+
+The study used subsamples of up to $5\times10^{4}$ jets rather than the full
+$1.2\times10^{6}$, so absolute performances are slightly below the published
+saturation values; the trends, not the records, are the contribution. The
+reference dataset contains no pile-up and uses a single detector
+parametrisation, so detector robustness and high-luminosity behaviour are not
+addressed. Each architecture was trained with a fixed, modest configuration
+rather than an exhaustive hyper-parameter search, and four models, while
+representative, are not exhaustive.
+
+\section{Future Work}
+\label{sec:future}
+
+Several extensions follow naturally from this work:
+\begin{enumerate}
+    \item \textbf{Scale up.} Repeat the data-efficiency sweep up to the full
+    $1.2\times10^{6}$ jets on a larger GPU to locate precisely where the
+    transformer overtakes ParticleNet by a statistically significant margin.
+    \item \textbf{Richer recalibration.} Compare temperature scaling with
+    non-parametric isotonic regression, particularly for the CNN whose
+    miscalibration temperature scaling does not fully remove.
+    \item \textbf{Robustness.} Study calibration and discrimination under
+    simulated pile-up and detector smearing, which is where calibration
+    matters most for real analyses.
+    \item \textbf{More architectures.} Add a Deep~Sets baseline and a
+    Lorentz-equivariant network~\citep{gong2022lorentznet} to the comparison.
+    \item \textbf{Uncertainty quantification.} Use deep ensembles or
+    Monte-Carlo dropout to attach predictive uncertainties to the tagger
+    scores.
+\end{enumerate}
+
+In summary, this project shows that asking \emph{how much data} and
+\emph{how trustworthy the probabilities are}, rather than only \emph{how
+high the AUC}, yields a more complete and more useful picture of deep
+jet-tagging models --- and that this picture can be obtained reproducibly on
+freely available hardware.

@@ -1,0 +1,32 @@
+\begin{abstract}
+Identifying the hadronic decays of highly boosted top quarks --- ``top
+tagging'' --- is a benchmark problem in collider physics and a proving
+ground for modern machine learning. This thesis compares four classifiers
+on the public Top-Quark Tagging Reference Dataset of 14\,TeV
+proton--proton collisions: a gradient-boosted decision tree (BDT) on
+engineered jet-substructure variables, a convolutional neural network (CNN)
+on jet images, the ParticleNet graph network, and the Particle Transformer.
+Beyond reproducing the usual ranking, the study asks two questions of direct
+practical value: how much training data each architecture needs (data
+efficiency), and whether its output scores can be trusted as probabilities
+(calibration). Using a reproducible pipeline trained on a free cloud GPU, we
+sweep the training set from $5\times10^{3}$ to $5\times10^{4}$ jets and
+measure test AUC, background rejection at fixed signal efficiency, the
+Expected Calibration Error (ECE), and the effect of temperature scaling. The
+Particle Transformer attains the best discrimination (AUC $=0.978$,
+background rejection $\approx136$ at $50\%$ signal efficiency), followed by
+ParticleNet, the CNN and the BDT, reproducing the published ordering. The
+data-efficiency study reveals a clear crossover: the BDT is strongest at the
+smallest training size but is overtaken by the deep models as data grows,
+the Particle Transformer rising from weakest to strongest. The calibration
+study shows that ranking and calibration are decoupled --- the jet-image CNN
+is the worst-calibrated model (ECE $=0.078$) despite its mid-pack ranking,
+whereas the top-ranked transformer is comparatively well-calibrated; a
+single-parameter temperature rescaling corrects all models except the CNN.
+The complete pipeline, trained models and documents are released as open
+source.
+
+\vspace{2mm}
+\noindent\textbf{Keywords:} top tagging, jet substructure, deep learning,
+ParticleNet, Particle Transformer, data efficiency, probability calibration.
+\end{abstract}

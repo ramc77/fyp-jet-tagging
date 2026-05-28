@@ -1,0 +1,154 @@
+\chapter{Introduction}
+\label{chap:introduction}
+
+\section{Background}
+\label{sec:background}
+
+The Large Hadron Collider (LHC) at CERN collides protons at a
+centre-of-mass energy of up to $14$\,TeV and records the debris with
+detectors such as ATLAS and CMS. Most of the interesting particles produced
+in these collisions are not observed directly; instead they decay into
+sprays of hadrons that are reconstructed into collimated bundles called
+\emph{jets}~\citep{cacciari2008,salam2010}. Reading the internal structure
+of a jet --- its \emph{substructure} --- is the key to deciding which kind
+of particle produced it~\citep{larkoski2020,kogler2019}.
+
+The top quark is the heaviest known elementary particle, with a mass of
+$m_t\simeq172.76$\,GeV~\citep{pdg2022}. It decays almost exclusively through
+$t\rightarrow Wb$, and when the $W$ boson decays hadronically the full chain
+becomes $t\rightarrow Wb\rightarrow q\bar{q}'b$. If the top quark is produced
+with a large transverse momentum (it is then said to be \emph{boosted}), the
+three resulting quarks are captured inside a single large-radius jet that
+carries a characteristic three-pronged energy pattern and a mass near
+$m_t$. Distinguishing such ``top jets'' from the vastly more common jets
+initiated by light quarks and gluons (Quantum Chromodynamics, QCD, jets) is
+known as \emph{top tagging}, and it is one of the canonical classification
+problems of collider physics~\citep{kasieczka2019landscape}.
+
+Over the last decade, top tagging has become a benchmark for machine
+learning in physics. Early approaches engineered physically motivated
+variables such as the jet mass, $N$-subjettiness~\citep{thaler2011} and
+energy-correlation functions~\citep{larkoski2013} and fed them to boosted
+decision trees or shallow networks. The field then moved to deep models that
+act directly on the low-level constituents: convolutional networks on
+pixelated ``jet images''~\citep{deoliveira2016,komiske2017}, graph networks
+such as ParticleNet~\citep{qu2020particlenet}, and most recently
+attention-based models such as the Particle
+Transformer~\citep{qu2022particletransformer}. On the standard reference
+dataset~\citep{kasieczka2019dataset}, these models reach areas under the ROC
+curve (AUC) above $0.98$, and a community
+comparison~\citep{kasieczka2019landscape} established the relative ordering
+that is now treated as the state of the art.
+
+\section{Problem Statement}
+\label{sec:problem_statement}
+
+The published top-tagging literature is almost entirely concerned with the
+\emph{best achievable} discrimination, quoted at the full training-set size
+of $1.2\times10^{6}$ jets and on large GPU clusters. Two questions of direct
+practical importance are rarely addressed together:
+
+\begin{enumerate}
+    \item \textbf{Data efficiency.} Generating labelled Monte Carlo training
+    samples is computationally expensive. How much does each architecture's
+    performance depend on the amount of training data, and does the ranking
+    of the models change in the small-data regime that a student or a small
+    group actually works in?
+    \item \textbf{Probability calibration.} A high AUC only certifies that a
+    model \emph{ranks} signal above background. Many downstream physics
+    analyses instead use the classifier score as a \emph{probability} (for
+    example, in a likelihood fit). Are the scores produced by these models
+    trustworthy probabilities, and if not, can they be cheaply corrected?
+\end{enumerate}
+
+This thesis addresses both questions on the public reference dataset using a
+single, reproducible pipeline that can be run end-to-end on free hardware.
+
+\section{Aim and Research Objectives}
+\label{sec:objectives}
+
+The overall \textbf{aim} of this project is to build a transparent,
+reproducible top-tagging pipeline and use it to study the data efficiency
+and probability calibration of four representative classifiers, rather than
+to chase a new record AUC.
+
+The specific \textbf{objectives} are:
+\begin{enumerate}
+    \item \textbf{To implement} a unified pipeline that trains and evaluates
+    four architectures --- a gradient-boosted decision tree (BDT) on
+    engineered features, a convolutional neural network (CNN) on jet images,
+    the ParticleNet graph network, and the Particle Transformer --- under
+    identical preprocessing, data splits and random seeds.
+    \item \textbf{To reproduce} the established performance ordering on the
+    Top-Quark Tagging Reference Dataset and report AUC, accuracy and
+    background rejection at fixed signal efficiency.
+    \item \textbf{To quantify data efficiency} by re-training each model from
+    scratch at four training-set sizes spanning a decade
+    ($5\times10^{3}$ to $5\times10^{4}$ jets) and measuring how performance
+    scales.
+    \item \textbf{To assess probability calibration} using reliability
+    diagrams and the Expected Calibration Error (ECE), and to test whether a
+    single-parameter temperature rescaling restores calibration.
+    \item \textbf{To make the work fully reproducible}, releasing the code,
+    trained models and documents as open source and providing a cloud-GPU
+    workflow that any student can follow.
+\end{enumerate}
+
+\section{Research Questions}
+\label{sec:research_questions}
+
+\begin{enumerate}
+    \item Does the literature ordering (Particle Transformer $>$ ParticleNet
+    $>$ CNN $>$ BDT) hold when all four models are trained identically on a
+    modest data and compute budget?
+    \item How does each model's discrimination scale with the training-set
+    size, and is there a regime in which the simple BDT is preferable to the
+    deep models?
+    \item Are the classifier scores well-calibrated probabilities, and does
+    temperature scaling fix any miscalibration?
+\end{enumerate}
+
+\section{Significance of the Study}
+\label{sec:significance}
+
+This study is significant for three reasons. First, it provides a clear,
+honest, reproducible reference implementation of four top-tagging
+architectures that can be used for teaching and as a baseline for future
+projects at the host institution and beyond. Second, the data-efficiency
+results give practitioners concrete guidance on which model to choose under a
+limited Monte Carlo budget --- a situation common outside the large LHC
+collaborations. Third, the calibration analysis highlights a subtle but
+important point often overlooked in physics machine-learning papers: a model
+with the best ranking power is not necessarily the one whose scores can be
+read as probabilities. Demonstrating that the entire study can be carried out
+on a free cloud GPU also lowers the barrier to entry for students in
+resource-constrained settings.
+
+\section{Scope and Limitations}
+\label{sec:scope}
+
+The study is deliberately bounded. We use stratified subsamples of up to
+$5\times10^{4}$ jets per split rather than the full $1.2\times10^{6}$-jet
+dataset, so the absolute AUC values are a little below the published
+saturation values; the \emph{trends} and \emph{rankings}, not the absolute
+records, are the object of study. The dataset itself is simulated with a
+single detector parametrisation and contains no pile-up, so questions of
+detector robustness and high-luminosity performance are out of scope. The
+four architectures are representative rather than exhaustive, and each is
+trained with a fixed, modest hyper-parameter configuration rather than an
+exhaustive search. These limitations are revisited in
+Chapter~\ref{chap:conclusions}.
+
+\section{Thesis Organization}
+\label{sec:organization}
+
+The remainder of this thesis is organised as follows.
+Chapter~\ref{chap:literature_review} reviews the physics of jets and top
+quarks and the machine-learning approaches to tagging.
+Chapter~\ref{chap:methodology} describes the dataset, the feature
+engineering, the four model architectures and the experimental protocol.
+Chapter~\ref{chap:results} presents the headline benchmark, the
+data-efficiency sweep and the calibration analysis, and discusses their
+meaning. Chapter~\ref{chap:conclusions} summarises the findings, states the
+limitations and proposes future work. Appendix~\ref{chap:appendix_a} gives
+reproduction instructions and selected implementation details.

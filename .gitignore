@@ -42,6 +42,13 @@ docs/**/*.synctex.gz
 docs/**/*.bbl
 docs/**/*.blg
 docs/**/*.bak
+docs/**/*.idx
+docs/**/*.ilg
+docs/**/*.ind
+docs/**/*.acn
+docs/**/*.acr
+docs/**/*.alg
+docs/**/*.glo
 
 # ───────────── Downloaded Colab results bundle (regenerable, heavy) ─────────────
 fyp_results/

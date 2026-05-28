@@ -1,0 +1,116 @@
+\chapter{Literature Review}
+\label{chap:literature_review}
+
+This chapter sets the physical and computational context for the project. It
+reviews the Standard Model and the role of the top quark, the formation and
+substructure of jets, the engineered observables used in classical tagging,
+and the deep-learning architectures that define the current state of the art.
+
+\section{The Standard Model and the Top Quark}
+\label{sec:sm}
+
+The Standard Model (SM) of particle physics describes the electromagnetic,
+weak and strong interactions of quarks and leptons through gauge symmetry
+$SU(3)_C\times SU(2)_L\times U(1)_Y$~\citep{pdg2022}. The top quark, the
+up-type quark of the third generation, is the heaviest known elementary
+particle, $m_t\simeq172.76$\,GeV. Because of this large mass its lifetime is
+shorter than the timescale of hadronisation, so it decays as a bare quark,
+almost always via $t\rightarrow Wb$. The $W$ boson subsequently decays either
+leptonically ($W\rightarrow\ell\nu$) or hadronically
+($W\rightarrow q\bar{q}'$). The hadronic channel,
+$t\rightarrow Wb\rightarrow q\bar{q}'b$, is the one relevant to this thesis:
+it produces three quarks that, for a boosted top, merge into one
+large-radius jet.
+
+\section{Jets and Jet Reconstruction}
+\label{sec:jets}
+
+Coloured partons cannot exist freely; they fragment and hadronise into
+collimated streams of colourless hadrons. These streams are reconstructed
+into jets by sequential-recombination algorithms, most commonly the
+anti-$k_t$ algorithm~\citep{cacciari2008} as implemented in
+\textsc{FastJet}~\citep{cacciari2012fastjet}. For boosted-object studies a
+large radius parameter ($R=0.8$ or $1.0$) is used so that the entire decay is
+contained in a single jet. A boosted top jet then differs from an ordinary
+QCD jet in three observable ways: it is more massive (its mass peaks near
+$m_t$), it has a three-pronged rather than one-pronged energy flow, and it
+contains more constituents. Exploiting these differences is the essence of
+jet-substructure analysis~\citep{larkoski2020,kogler2019}.
+
+\section{Engineered Substructure Observables}
+\label{sec:observables}
+
+Classical taggers compress the jet into a handful of physically motivated
+numbers. The most important are:
+\begin{itemize}
+    \item \textbf{Jet mass} --- the invariant mass of the summed constituent
+    four-momenta, which discriminates the heavy top from light QCD jets.
+    \item \textbf{$N$-subjettiness} $\tau_N$ and its ratios
+    $\tau_{21}=\tau_2/\tau_1$, $\tau_{32}=\tau_3/\tau_2$, which quantify how
+    well the radiation is described by $N$ subjet axes~\citep{thaler2011}. A
+    genuine three-prong top jet has small $\tau_{32}$.
+    \item \textbf{Energy-correlation functions} and the ratios $C_2$, $D_2$,
+    which capture $n$-point energy correlations without explicit subjet
+    finding~\citep{larkoski2013,larkoski2014}.
+\end{itemize}
+Fed to a boosted decision tree (BDT), typically implemented with
+\textsc{XGBoost}~\citep{chen2016xgboost}, these observables already provide
+strong discrimination and remain a competitive, interpretable baseline.
+
+\section{Deep Learning on Jets}
+\label{sec:deep}
+
+The deep-learning era of tagging replaced hand-engineered features with
+representations learned directly from the constituents. Three families are
+relevant here.
+
+\subsection{Jet Images and Convolutional Networks}
+Pixelating the constituents in the rapidity--azimuth plane turns a jet into
+an image that a convolutional neural network (CNN) can classify, in close
+analogy with calorimeter readout~\citep{deoliveira2016,komiske2017}. Image
+methods were the first deep approaches to surpass engineered-feature BDTs,
+but the binning discards angular resolution and breaks the natural
+permutation symmetry of the constituents.
+
+\subsection{Particle Clouds and Graph Networks}
+Treating a jet as an unordered set --- a ``particle cloud'' --- preserves the
+full constituent information. ParticleNet~\citep{qu2020particlenet} adapts the
+Dynamic Graph CNN~\citep{wang2019dgcnn} to jets, building a
+$k$-nearest-neighbour graph in feature space and applying EdgeConv operations
+that are invariant to constituent ordering. This and related set/graph
+approaches~\citep{komiske2019efn,moreno2020jedinet} substantially improved
+tagging performance.
+
+\subsection{Attention and the Particle Transformer}
+The Transformer architecture~\citep{vaswani2017attention} models pairwise
+interactions through self-attention. The Particle
+Transformer~\citep{qu2022particletransformer} augments standard attention
+with physically motivated pairwise features (angular distance, $k_t$,
+momentum fraction and invariant mass) injected as an attention bias, and
+currently holds the top of the reference-dataset
+leaderboard~\citep{kasieczka2019landscape}. Related physics-informed and
+Lorentz-equivariant designs continue to push the
+frontier~\citep{bogatskiy2020lorentz,gong2022lorentznet}.
+
+\section{Probability Calibration in Machine Learning}
+\label{sec:calibration_lit}
+
+A classifier is \emph{calibrated} if, among samples it assigns score $p$, a
+fraction $p$ are truly positive. \citet{guo2017calibration} showed that
+modern deep networks, although accurate, are frequently \emph{over-confident}
+and that a simple post-hoc \emph{temperature scaling} --- dividing the logits
+by a single learned scalar $T$ --- often restores calibration. Calibration is
+measured by the Expected Calibration Error (ECE) and visualised with
+reliability diagrams~\citep{niculescu2005calibration}. Although calibration
+is standard in the broader ML community, it is seldom reported in
+physics-tagging papers, which is precisely the gap this thesis explores.
+
+\section{Summary and Gap}
+\label{sec:gap}
+
+The literature establishes both a strong set of engineered observables and a
+clear hierarchy of deep models, all benchmarked at the full data and compute
+budget. What is missing, and what this thesis provides, is a controlled,
+reproducible comparison of \emph{data efficiency} and \emph{probability
+calibration} across these architectures in the modest-budget regime that is
+realistic for most students and small groups.

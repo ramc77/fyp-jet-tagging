@@ -1,0 +1,144 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% MS/MPhil Thesis Template for Begum Nusrat Bhutto Women University, Sukkur
+%%
+%% Adapted from the BS thesis template.
+%% In case of any difficulties please contact Dr Ram Chand: ram.chand@bnbwu.edu.pk
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\RequirePackage[l2tabu, orthodox]{nag} % warns about bad LaTeX usage
+                                       % must be first thing in the class
+
+%% ---- Document class: oneside or twoside ----
+\documentclass[oneside]{bnbwu-ms}     % custom BNBWU MS/MPhil thesis class
+
+
+%% **************** (Your) Packages (Start) ******************
+
+%% Note: many packages are already loaded by bnbwu-ms.cls (and memoir).
+%% Add only YOUR additional packages here.
+
+\usepackage{amsmath}          %% for equations (amssymb loaded by cls)
+\usepackage{booktabs}         %% for professional tables
+%\usepackage{siunitx}         %% uncomment if you need SI units
+%\usepackage{algorithm2e}     %% uncomment for algorithm pseudocode
+%\usepackage{listings}        %% uncomment for source code listings
+%\usepackage{tikz}            %% uncomment for TikZ drawings
+
+%% ***************** (Your) Packages (End) *******************
+
+
+%% **************** (Your) Data (Start) ******************
+
+%% TODO: Replace ALL placeholder values below with your own information.
+
+\title{Deep Learning for Top-Quark Jet Tagging:\\ A Data-Efficiency and
+Probability-Calibration Study on the 14\,TeV Reference Dataset}
+
+\tagline{A comparison of boosted decision trees, jet-image CNNs,
+ParticleNet and the Particle Transformer}
+
+\author{Bibi Naifa, Mah Lacka, Kanwal Gul \& Firdos}
+
+\enrollment{BS Physics, Final-Year Project (2022--2026)}
+
+\program{BS Physics}
+
+\specialization{Particle Physics \& Machine Learning}
+
+\supervisor{Dr.\ Ram Chand}                     % supervisor / corresponding author
+
+%\cosupervisor{Dr.\ Co-Supervisor Name}
+
+\department{Department of Natural Sciences}
+
+\faculty{Faculty of Education, Linguistics \& Sciences}
+
+\degree{Bachelor of Science in Physics}
+
+\doctype{thesis}
+
+\degreedate{June 2026}
+
+%% Certificate page signatories
+\chairperson{Dr.\ [Chairperson, Dept.\ of Natural Sciences]}
+\dean{Prof.\ Dr.\ [Dean of Faculty]}
+
+%% ***************** (Your) Data (End) *******************
+
+
+%% ******** (Your) Document Settings (Start) *************
+
+%% Image search paths -- add paths for each chapter's images subdir.
+%% NOTE: trailing / is required for subdirectories.
+\graphicspath{{./images/}{./chap1/images/}{./chap2/images/}{./chap3/images/}{./chap4/images/}{./chap5/images/}{../../../results/plots/}}
+
+\makeindex
+
+%% ********* (Your) Document Settings (End) **************
+
+
+\begin{document}
+
+	%% ============================================================
+	%% FRONT MATTER
+	%% Roman numerals, no chapter numbers.
+	%% ============================================================
+	\frontmatter
+
+	\input{frontmatter/01_TitlePage}              % formal title page
+	\input{frontmatter/0Declaration}               % declaration of originality
+	\input{frontmatter/0Certificate}               % supervisor certificate
+	\input{frontmatter/dedication}                 % dedication (optional)
+	\input{frontmatter/acknowledgements}           % acknowledgements
+	\input{frontmatter/abstract}                   % abstract (max 250 words)
+	\if@openright\cleardoublepage\else\clearpage\fi
+
+	\tableofcontents*                              % table of contents
+	\if@openright\cleardoublepage\else\clearpage\fi
+
+	\listoffigures*                                % list of figures
+	\if@openright\cleardoublepage\else\clearpage\fi
+
+	\listoftables*                                 % list of tables
+	\if@openright\cleardoublepage\else\clearpage\fi
+
+	\input{frontmatter/abbreviations}              % list of abbreviations
+	\if@openright\cleardoublepage\else\clearpage\fi
+
+
+	%% ============================================================
+	%% MAIN MATTER
+	%% Arabic numerals, chapter numbers, running headers.
+	%% ============================================================
+	\pagestyle{bnbpage}
+	\mainmatter
+
+	\input{chap1/introduction_main}                % Chapter 1: Introduction
+	\input{chap2/literature_review_main}           % Chapter 2: Literature Review
+	\input{chap3/methodology_main}                 % Chapter 3: Methodology
+	\input{chap4/results_main}                     % Chapter 4: Results and Discussion
+	\input{chap5/conclusions_main}                 % Chapter 5: Conclusions
+
+
+	%% ============================================================
+	%% APPENDICES
+	%% ============================================================
+	\appendix
+	\input{appA/appendix_a_main}                   % Appendix A
+
+
+	%% ============================================================
+	%% BACK MATTER -- References and index.
+	%% ============================================================
+	{\backmatter
+		\if@openright\cleardoublepage\else\clearpage\fi
+		\bibliographystyle{bnb-plainnat}           % BNBWU bibliography style
+		{\footnotesize\bibliography{references}}   % your .bib file(s)
+		\printindex
+	}
+
+\end{document}
+
+%%% The End %%%

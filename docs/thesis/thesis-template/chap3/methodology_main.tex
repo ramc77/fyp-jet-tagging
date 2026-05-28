@@ -1,0 +1,133 @@
+\chapter{Methodology}
+\label{chap:methodology}
+
+This chapter describes how the study was carried out: the dataset, the
+preprocessing and feature engineering, the four model architectures, the
+training protocol, and the metrics used for evaluation, data efficiency and
+calibration. The complete implementation is released as open
+source.\footnote{\url{https://github.com/ramc77/fyp-jet-tagging}}
+
+\section{Dataset}
+\label{sec:dataset}
+
+We use the public \emph{Top-Quark Tagging Reference
+Dataset}~\citep{kasieczka2019dataset}, the community-standard benchmark for
+this problem~\citep{kasieczka2019landscape}. It contains $2\times10^{6}$
+simulated jets from $14$\,TeV proton--proton collisions, generated with
+\textsc{Pythia\,8}~\citep{sjostrand2015pythia} and a \textsc{Delphes}
+fast detector simulation~\citep{delphes2014} of an ATLAS-like detector.
+Signal jets come from boosted hadronic top decays; background jets come from
+QCD dijet production. Jets are clustered with the anti-$k_t$
+algorithm~\citep{cacciari2008} with radius $R=0.8$ and transverse momentum
+$550<p_T<650$\,GeV, and each jet is stored as up to $200$ constituent
+four-momenta with a binary label (top vs.\ QCD).
+
+For computational tractability we draw stratified subsamples of up to
+$5\times10^{4}$ jets per split (training, validation, test), keeping the
+roughly $50/50$ signal-to-background balance of the full dataset. The deep
+models use the leading $100$ constituents per jet, ordered by $p_T$.
+
+\section{Preprocessing and Feature Engineering}
+\label{sec:features}
+
+\subsection{Per-constituent features}
+From each constituent four-momentum $(E,p_x,p_y,p_z)$ we compute the
+transverse momentum $p_T$, pseudorapidity $\eta$ and azimuth $\phi$, and the
+coordinates relative to the $p_T$-weighted jet axis,
+$(\Delta\eta,\Delta\phi)$. The seven-dimensional feature vector
+$(p_T,\eta,\phi,E,\Delta\eta,\Delta\phi,\log p_T)$ is standardised
+feature-wise using statistics computed on the training split only.
+
+\subsection{Engineered jet-level features (for the BDT)}
+For the BDT baseline we compute thirteen high-level observables: the jet
+mass, $p_T$ and $\eta$; the constituent multiplicity; the jet width; the
+leading and sub-leading $p_T$ fractions; the $N$-subjettiness variables
+$\tau_1,\tau_2,\tau_3$ and ratios $\tau_{21},\tau_{32}$~\citep{thaler2011};
+and the energy-correlation ratio $C_2$~\citep{larkoski2013}. Their
+distributions for signal and background are shown in
+Chapter~\ref{chap:results} and behave exactly as physics expects, validating
+the pipeline.
+
+\subsection{Jet images (for the CNN)}
+For the CNN, constituents are binned into $40\times40$ images in the
+$(\Delta\eta,\Delta\phi)$ plane with three channels: the $p_T$ sum, the
+constituent multiplicity, and the $p_T^2$ sum per pixel. Each channel is
+normalised by its per-image maximum.
+
+\subsection{Pairwise interaction features (for the Transformer)}
+For the Particle Transformer we additionally compute, on the fly, four
+pairwise quantities for every constituent pair $(i,j)$:
+$\ln\Delta R_{ij}$, $\ln k_{T,ij}$, the momentum fraction $z_{ij}$, and
+$\Delta\eta_{ij}$, following~\citet{qu2022particletransformer}.
+
+\section{Model Architectures}
+\label{sec:models}
+
+\subsection{Boosted decision tree (BDT)}
+A gradient-boosted decision tree trained with
+\textsc{XGBoost}~\citep{chen2016xgboost} on the thirteen engineered features,
+with up to $500$ boosting rounds, maximum depth $7$, learning rate $0.1$ and
+column/row subsampling $0.8$, with early stopping on validation AUC. It is
+the interpretable, classical baseline.
+
+\subsection{Convolutional neural network (CNN)}
+A compact ResNet-style network~\citep{he2016resnet} with three residual
+blocks ($64\rightarrow128\rightarrow256$ channels), batch normalisation,
+global average pooling and a fully connected head, acting on the
+$40\times40\times3$ jet images.
+
+\subsection{ParticleNet}
+A from-scratch implementation of
+ParticleNet~\citep{qu2020particlenet}, using three EdgeConv
+blocks~\citep{wang2019dgcnn} with a $k=16$ dynamic nearest-neighbour graph
+in $(\Delta\eta,\Delta\phi)$ space, followed by global pooling and a fully
+connected classifier. It treats the jet as a permutation-invariant particle
+cloud.
+
+\subsection{Particle Transformer}
+A self-attention model~\citep{qu2022particletransformer} with three encoder
+blocks, multi-head attention, and the four pairwise features injected as an
+additive attention bias. A learnable class token aggregates the sequence for
+classification, and its attention weights provide an interpretability handle.
+
+\section{Training Protocol}
+\label{sec:training}
+
+All deep models are trained by minimising binary cross-entropy with the
+Adam/AdamW optimiser~\citep{kingma2014adam,loshchilov2019adamw}, with learning
+rates of $10^{-3}$--$10^{-4}$, a plateau learning-rate scheduler, gradient
+clipping and early stopping on validation AUC. Training was performed on a
+free Google Colaboratory T4 GPU; the same code runs on CPU. To make long runs
+robust, the pipeline checkpoints after every epoch and resumes automatically,
+so a session can be interrupted and continued without loss of progress.
+
+\section{Evaluation Metrics}
+\label{sec:metrics}
+
+\subsection{Discrimination}
+We report the area under the ROC curve (AUC), the accuracy at a score
+threshold of $0.5$, and the \emph{background rejection}
+$1/\varepsilon_B$ at fixed signal efficiencies $\varepsilon_S=0.5$ and
+$0.3$, which is the figure of merit most relevant to physics analyses.
+Uncertainties on the AUC are estimated by bootstrap resampling of the test
+set.
+
+\subsection{Data efficiency}
+Each model is retrained from scratch at
+$N_{\text{train}}\in\{5{,}000,\,10{,}000,\,25{,}000,\,50{,}000\}$ jets, with
+all other settings fixed, and the resulting test AUC and background rejection
+are plotted against $N_{\text{train}}$ to expose how each architecture scales.
+
+\subsection{Calibration}
+We measure the Expected Calibration Error
+\begin{equation}
+\mathrm{ECE}=\sum_{m=1}^{M}\frac{|B_m|}{N}\,
+\bigl|\,\mathrm{acc}(B_m)-\mathrm{conf}(B_m)\,\bigr|,
+\label{eq:ece}
+\end{equation}
+where the predictions are partitioned into $M$ equal-width score bins $B_m$
+and $\mathrm{acc}$ and $\mathrm{conf}$ are the bin accuracy and mean
+confidence~\citep{guo2017calibration}. We complement the ECE with reliability
+diagrams, and we fit a single \emph{temperature} $T$ on the validation set by
+minimising the negative log-likelihood of $\sigma(\,z/T\,)$, where $z$ are
+the logits, reporting the ECE before and after this rescaling.

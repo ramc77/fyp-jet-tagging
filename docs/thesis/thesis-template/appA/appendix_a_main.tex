@@ -1,0 +1,87 @@
+\chapter{Reproducibility and Supplementary Material}
+\label{chap:appendix_a}
+
+\section{Code and Data Availability}
+\label{sec:availability}
+
+The complete pipeline --- data loading, feature engineering, the four models,
+training, evaluation and all plotting --- is released as open source at
+\begin{center}
+\url{https://github.com/ramc77/fyp-jet-tagging}
+\end{center}
+The dataset is the public Top-Quark Tagging Reference
+Dataset~\citep{kasieczka2019dataset}, available from Zenodo
+(\url{https://zenodo.org/records/2603256}).
+
+\section{How to Reproduce the Results}
+\label{sec:reproduce}
+
+On a machine with Python~3.11 the headline results and study are reproduced
+with:
+\begin{verbatim}
+python3 -m venv particle_venv
+source particle_venv/bin/activate
+pip install -r requirements.txt
+python3 download_data.py --yes        # fetch the dataset
+python3 run_full_pipeline.py          # train + evaluate all four models
+python3 run_study.py                  # data-efficiency + calibration sweep
+\end{verbatim}
+A Google Colaboratory notebook (\texttt{notebooks/FYP\_Colab.ipynb}) runs the
+same pipeline on a free T4 GPU and downloads the results. Every training stage
+checkpoints after each epoch and resumes automatically, so a run may be
+interrupted and continued.
+
+\section{Training Configuration}
+\label{sec:config}
+
+\begin{table}[htbp]
+\centering
+\caption{Principal hyper-parameters of the four models.}
+\label{tab:hyperparams}
+\ra{1.2}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Model} & \textbf{Key settings} & \textbf{Parameters} \\
+\midrule
+BDT (XGBoost)        & 500 rounds, depth 7, lr 0.1   & $\sim$160 trees \\
+CNN (jet images)     & 3 ResNet blocks, 64--256 ch.  & $1.26$\,M \\
+ParticleNet          & 3 EdgeConv blocks, $k=16$     & $0.37$\,M \\
+Particle Transformer & 3 blocks, 4 heads, dim 128    & $0.43$\,M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All models minimise binary cross-entropy with the Adam/AdamW optimiser,
+gradient clipping, a plateau learning-rate scheduler and early stopping on
+the validation AUC, as detailed in Section~\ref{sec:training}.
+
+\section{Training History}
+\label{sec:history}
+
+Figure~\ref{fig:history} shows the training and validation loss and AUC
+curves for the three neural models, confirming smooth convergence without
+significant over-fitting within the epoch budget.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{training_history.pdf}
+\caption{Training/validation loss and validation AUC versus epoch for the
+CNN, ParticleNet and Particle Transformer.}
+\label{fig:history}
+\end{figure}
+
+\section{Transformer Attention Maps}
+\label{sec:attnmaps}
+
+Figure~\ref{fig:attnmaps} shows representative head-averaged self-attention
+maps for top jets across the transformer layers, complementing the
+class-token analysis in Section~\ref{sec:res_interpret}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{attention_maps.pdf}
+\caption{Head-averaged self-attention maps of the Particle Transformer for
+sample top jets across the encoder layers. The padded (non-particle)
+positions appear as uniform blocks.}
+\label{fig:attnmaps}
+\end{figure}
