@@ -1,0 +1,15 @@
+# ============================================================
+# Colab-only extras.
+#
+# DO NOT install torch / torchvision / numpy / pandas here — Google
+# Colab ships a CUDA-enabled PyTorch and a matching NumPy/pandas stack.
+# Reinstalling them (as plain requirements.txt would) downgrades to the
+# CPU wheel and/or breaks the NumPy ABI, killing GPU acceleration.
+#
+# Install with:   pip install -q -r requirements-colab.txt
+# ============================================================
+
+tables>=3.8        # PyTables — needed to read the HDF5 dataset
+mplhep>=0.3        # CMS/ATLAS plot styling
+xgboost>=2.0       # BDT baseline (Colab's build is fine too, this pins >=2)
+seaborn>=0.13      # used by a couple of plots

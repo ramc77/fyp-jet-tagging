@@ -1,0 +1,462 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black,citecolor=blue!60!black]{hyperref}
+\usepackage[capitalise]{cleveref}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+% microtype removed: lmodern is not installed in this TeX Live.
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+\definecolor{codebg}{HTML}{F5F5F5}
+\definecolor{codekw}{HTML}{0000AA}
+\definecolor{codecmt}{HTML}{006400}
+\definecolor{codestr}{HTML}{A52A2A}
+
+\lstdefinestyle{shell}{
+  language=bash,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  framerule=0.4pt,
+  framesep=4pt,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  commentstyle=\color{codecmt}\itshape,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  showstringspaces=false,
+}
+\lstdefinestyle{py}{
+  language=Python,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  framerule=0.4pt,
+  framesep=4pt,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecmt}\itshape,
+  stringstyle=\color{codestr},
+  showstringspaces=false,
+}
+
+\newtcolorbox{tipbox}{
+  colback=blue!4!white, colframe=blue!50!black,
+  arc=2pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+  title=Tip,
+  fonttitle=\bfseries,
+  breakable
+}
+\newtcolorbox{warnbox}{
+  colback=red!5!white, colframe=red!50!black,
+  arc=2pt, left=4pt, right=4pt, top=3pt, bottom=3pt,
+  title=Watch out,
+  fonttitle=\bfseries,
+  breakable
+}
+
+\title{\textbf{Student tutorial: a CPU-friendly pipeline for top-quark
+tagging with classical ML and deep learning}}
+\author{BNBWU--CERN FYP collaboration\\
+        \small for BS Physics final-year students}
+\date{\today}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This is the practical companion to the research article. It walks
+you, step by step, through the codebase, the physics behind it, and
+exactly which commands to type to reproduce every figure. By the end
+you will (a) understand \emph{what} the pipeline does and \emph{why},
+(b) be able to run it end-to-end on a laptop, and (c) be able to
+modify any of the four models for your own experiments.
+\end{abstract}
+
+\tableofcontents
+\vspace{0.4cm}
+
+% ----------------------------------------------------------------
+\section{What is this project, in one paragraph?}\label{sec:what}
+
+At the LHC, a top quark almost always decays to a $W$ boson and a
+$b$-quark; the $W$ then decays to two more quarks. When the top is
+produced with high transverse momentum, all three of those quarks end
+up inside a single, large-radius jet. The job of a ``top tagger'' is
+to look at that jet and decide whether it really came from a top, or
+just from an ordinary QCD multi-parton splash. We compare four
+different ways to do that on a public benchmark dataset:
+\begin{enumerate}
+    \item A \textbf{boosted decision tree} on hand-engineered jet
+          features (the classical baseline).
+    \item A \textbf{convolutional neural network} on
+          $(\eta,\phi)$ ``jet images''.
+    \item \textbf{ParticleNet}, a graph neural network that treats
+          the jet as an unordered cloud of particles.
+    \item The \textbf{Particle Transformer}, the modern
+          self-attention architecture used in CMS/ATLAS.
+\end{enumerate}
+
+The pipeline trains them, evaluates them, makes calibration plots and
+saves everything to \texttt{results/}. The research angle is in
+\texttt{run\_study.py} and asks: \emph{how much data does each model
+need, and are its scores trustworthy probabilities?}
+
+% ----------------------------------------------------------------
+\section{A bit of physics background}\label{sec:physics}
+
+\subsection*{The Standard Model, in 60 seconds}
+The Standard Model has six quarks, six leptons and four gauge bosons.
+The top quark is the heaviest, $m_t\!\simeq\!172.76$\,GeV. It is so
+heavy that it decays before it can hadronise: more than 99\,\% of the
+time, $t\to W b$, and the $W$ then decays either leptonically
+(to $\ell\nu$) or hadronically (to $q\bar q$). In this project we
+work with the \emph{fully hadronic} case
+\[
+   t \;\to\; W b \;\to\; (q\bar q)\,b ,
+\]
+which gives three quarks inside one ``boosted'' jet at high
+$p_T$. The signature is a three-prong substructure and a jet mass
+$\sim\!m_t$. QCD jets are dominantly one-prong and lighter --- this
+is the physical signal/background asymmetry we are exploiting.
+
+\subsection*{Why ``jet substructure''?}
+At hadron colliders one cluster final-state particles into ``jets''
+using algorithms like anti-$k_T$. Once a single boosted jet contains
+the whole top decay, the \emph{internal} structure of the jet
+(its mass, its $N$-subjettiness ratios $\tau_{21}$, $\tau_{32}$, its
+energy correlation functions $C_2$) becomes the discriminating
+information. The BDT baseline of this project uses exactly those
+hand-engineered features.
+
+\subsection*{Why deep learning, then?}
+Hand-engineered features compress all the constituent information
+into 10--20 numbers. A deep network is allowed to look at all the
+constituent four-momenta and \emph{learn} its own features. The
+question of this project is how much extra discrimination that
+freedom buys --- and at what cost in training data and calibration.
+
+% ----------------------------------------------------------------
+\section{Project layout}\label{sec:layout}
+
+\begin{lstlisting}[style=shell,caption={Top-level directory tree.}]
+FYP_particle_physics/
++- config.py                  all hyperparameters & paths
++- download_data.py           Zenodo fetcher
++- run_full_pipeline.py       headline run (all 4 models)
++- run_study.py               data-efficiency + calibration sweep
++- requirements.txt
++- src/
+|  +- data_utils.py           HDF5 reader, feature engineering
+|  +- jet_cnn.py              CNN on jet images
+|  +- particle_net.py         EdgeConv graph network
+|  +- particle_transformer.py self-attention model
+|  +- trainer.py              unified train/val/predict + BDT
+|  +- evaluation.py           metrics + all publication plots
+|  +- study_utils.py          data-efficiency + calibration plots
++- notebooks/                 exploratory analysis
++- docs/                      this tutorial + article + thesis
++- data/                      created by download_data.py
++- results/                   created at runtime
+\end{lstlisting}
+
+\begin{tipbox}
+If you have never read this code before, the best entry points are
+\texttt{run\_full\_pipeline.py} (orchestrator), \texttt{config.py}
+(everything you can tune), and the \texttt{compute\_*\_features}
+functions in \texttt{src/data\_utils.py} (the physics).
+\end{tipbox}
+
+% ----------------------------------------------------------------
+\section{Setting up the environment}\label{sec:setup}
+
+\subsection{macOS / Linux / WSL}
+\begin{lstlisting}[style=shell]
+# 1) clone / cd into the project
+cd FYP_particle_physics
+
+# 2) create a fresh virtual environment
+python3 -m venv particle_venv
+source particle_venv/bin/activate
+
+# 3) upgrade pip and install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+\end{lstlisting}
+
+\begin{warnbox}
+Do not place the venv on a OneDrive or iCloud folder. Cloud
+synchronisation will mark large binary files (e.g.\
+\texttt{libtorch\_cpu.dylib}) as ``online-only'' placeholders, and
+the operating system will then fail to memory-map them, causing
+PyTorch to silently break at import time. Use a local, non-synced
+folder.
+\end{warnbox}
+
+\subsection{Sanity check}
+\begin{lstlisting}[style=shell]
+python3 -c "import torch, xgboost, h5py; print(torch.__version__)"
+\end{lstlisting}
+
+If this prints a torch version, you are good.
+
+% ----------------------------------------------------------------
+\section{Downloading the dataset}\label{sec:download}
+
+\begin{lstlisting}[style=shell]
+python3 download_data.py     # answer 'y' at the prompt
+\end{lstlisting}
+
+This grabs three HDF5 files (about $1.6$\,GB total) from Zenodo and
+drops them into \texttt{data/}. The script is resumable: if your
+connection drops, just re-run it. If automatic download fails (e.g.\
+proxy), download manually from
+\href{https://zenodo.org/records/2603256}{zenodo.org/records/2603256}
+and place \texttt{train.h5}, \texttt{val.h5}, \texttt{test.h5} into
+\texttt{data/}.
+
+% ----------------------------------------------------------------
+\section{Running the headline pipeline}\label{sec:run}
+
+The full headline run is a single command:
+\begin{lstlisting}[style=shell]
+python3 run_full_pipeline.py
+\end{lstlisting}
+
+That will:
+\begin{enumerate}
+    \item Read $5\!\times\!10^4$ jets per split from the HDF5 files.
+    \item Compute particle-level and jet-level features, plus
+          jet images.
+    \item Train BDT, CNN, ParticleNet, Particle Transformer one
+          after the other.
+    \item Save checkpoints to \texttt{results/models/}.
+    \item Generate all publication plots in
+          \texttt{results/plots/} and a comparison table at
+          \texttt{results/model\_comparison.json}.
+\end{enumerate}
+
+Useful flags:
+\begin{lstlisting}[style=shell]
+python3 run_full_pipeline.py --model bdt          # only BDT
+python3 run_full_pipeline.py --model cnn          # only CNN
+python3 run_full_pipeline.py --model particlenet  # only ParticleNet
+python3 run_full_pipeline.py --model transformer  # only ParT
+python3 run_full_pipeline.py --eval-only          # rebuild plots
+                                                  # from saved ckpts
+python3 run_full_pipeline.py --max-particles 50   # faster
+\end{lstlisting}
+
+\begin{tipbox}
+The first time you run the pipeline, allow up to one hour on a
+laptop CPU. Subsequent runs in \texttt{--eval-only} mode regenerate
+plots from saved checkpoints in $\sim\!2$ minutes.
+\end{tipbox}
+
+\subsection{Stopping and resuming}\label{sec:resume}
+The pipeline is fully checkpointed. You can Ctrl-C at any moment ---
+between epochs, in the middle of a batch, even by closing the
+laptop --- and pick up exactly where you stopped by re-running the
+same command:
+\begin{lstlisting}[style=shell]
+python3 run_full_pipeline.py        # starts (or resumes)
+# ... Ctrl-C ...
+python3 run_full_pipeline.py        # resumes mid-CNN, then
+                                    # continues with ParticleNet
+                                    # and Particle Transformer
+\end{lstlisting}
+
+What is persisted as you go:
+\begin{itemize}
+  \item \texttt{results/models/<model>\_last.pt}: full training state
+        (model, optimiser, scheduler, AMP scaler, epoch counter,
+        history) snapshot after every epoch.
+  \item \texttt{results/models/<model>\_best.pt}: best-val-AUC
+        checkpoint, used for the final test prediction and the plots.
+  \item \texttt{results/models/<model>\_done.json}: a small marker
+        file written when training for that model has \emph{finished}
+        (either max-epochs or early-stop).  Models whose marker
+        exists are skipped on the next run.
+  \item \texttt{results/predictions/<model>\_test.npz}: cached test
+        predictions, used to skip the prediction step too.
+  \item \texttt{results/<model>\_history.json}: epoch-by-epoch loss
+        and AUC, updated every epoch (so the training-history plot
+        reflects partial progress as well).
+\end{itemize}
+
+\noindent To force a fresh re-train, pass \verb|--force| (or delete
+\texttt{results/models/}).  The same scheme applies to
+\texttt{run\_study.py}: each (model, $N_{\text{train}}$) cell is
+resumable independently.
+
+% ----------------------------------------------------------------
+\section{Running the research-angle study}\label{sec:study}
+
+Once the headline run finishes, the research contribution comes from
+\begin{lstlisting}[style=shell]
+python3 run_study.py
+\end{lstlisting}
+
+This re-trains each model at $N_{\text{train}} \in
+\{5\,000, 10\,000, 25\,000, 50\,000\}$ jets, measures test AUC and
+background rejection at fixed signal efficiency, and computes the
+probability calibration of each model with and without a
+single-parameter temperature rescaling.
+
+Selected flags:
+\begin{lstlisting}[style=shell]
+# pick the sizes to sweep
+python3 run_study.py --sizes 5000 25000 50000
+
+# only some models
+python3 run_study.py --models bdt cnn
+
+# cap epochs per training (default 15)
+python3 run_study.py --epochs-cap 10
+\end{lstlisting}
+
+% ----------------------------------------------------------------
+\section{Reading the plots}\label{sec:plots}
+
+All plots land in \texttt{results/plots/}, in both PDF and PNG. The
+intent of each:
+\begin{description}
+    \item[\texttt{jet\_substructure.pdf}]\quad Signal/background
+        distributions of all 13 engineered observables. The
+        \emph{physics check} -- if this looks wrong, the dataset
+        loading is broken.
+    \item[\texttt{average\_jet\_images.pdf}]\quad The mean
+        $p_T$-weighted image for top vs.\ QCD. You should
+        \emph{see} the three-prong topology in the difference
+        panel.
+    \item[\texttt{roc\_comparison.pdf}]\quad ROC and background
+        rejection vs.\ signal efficiency. The headline result.
+    \item[\texttt{score\_distributions.pdf}]\quad Per-model
+        classifier output distributions. Look for the
+        characteristic ``peak at 0 / peak at 1'' shape that
+        well-trained binary classifiers produce.
+    \item[\texttt{confusion\_matrices.pdf}]\quad At threshold 0.5.
+        Off-diagonal entries are misclassifications.
+    \item[\texttt{training\_history.pdf}]\quad Train/val loss and
+        AUC vs.\ epoch. Use it to diagnose overfitting (train
+        loss falling while val loss climbing) and to set the
+        early-stop patience.
+    \item[\texttt{bdt\_importance.pdf}]\quad XGBoost gain-based
+        feature importance. You should see jet mass, $\tau_{32}$
+        and constituent count among the top three.
+    \item[\texttt{attention\_maps.pdf} /
+          \texttt{cls\_attention.pdf}]\quad Particle Transformer
+        interpretability.
+    \item[\texttt{learning\_curves.pdf}]\quad Output of
+        \texttt{run\_study.py}: AUC and rejection vs.\ training-set
+        size.
+    \item[\texttt{calibration.pdf}]\quad Reliability diagrams and
+        ECE before/after temperature rescaling.
+\end{description}
+
+% ----------------------------------------------------------------
+\section{How to modify the pipeline}\label{sec:modify}
+
+\paragraph{Try a new dataset subset size.}
+Edit \texttt{config.py}: change \texttt{SUBSET\_TRAIN /
+SUBSET\_VAL / SUBSET\_TEST}.
+
+\paragraph{Try a deeper CNN.}
+Edit \texttt{CNN\_CONFIG[``filters'']} in \texttt{config.py}, or
+the residual structure in \texttt{src/jet\_cnn.py}.
+
+\paragraph{Change the kNN of ParticleNet.}
+\texttt{PARTICLENET\_CONFIG[``k\_neighbors'']} in \texttt{config.py}.
+
+\paragraph{Add more pairwise features for the Transformer.}
+The pairwise features are computed in
+\texttt{compute\_pairwise\_features\_batch} inside
+\texttt{src/data\_utils.py}. Add another channel there (e.g.\ the
+invariant mass $m_{ij}$) and bump
+\texttt{PARTFORMER\_CONFIG[``pair\_features'']} accordingly.
+
+\paragraph{Add a new model.}
+\begin{enumerate}
+    \item Create a new file \texttt{src/my\_model.py} with a
+          PyTorch class implementing \texttt{forward(features,
+          mask)} (and \texttt{count\_parameters}).
+    \item Register a hyperparameter dict in \texttt{config.py}.
+    \item Add a new branch in \texttt{run\_full\_pipeline.py}
+          following the \texttt{ParticleNet} branch as a template.
+\end{enumerate}
+
+% ----------------------------------------------------------------
+\section{Troubleshooting}\label{sec:trouble}
+
+\begin{description}
+\item[\texttt{ImportError: dlopen ... libtorch\_cpu.dylib}]\quad
+The venv is on a OneDrive/iCloud-synced path. Re-create it on a
+local, non-synced folder (see \cref{sec:setup}).
+
+\item[\texttt{zsh: segmentation fault python3 run\_full\_pipeline.py}]\quad
+macOS OpenMP collision between NumPy's \texttt{libiomp5} and
+XGBoost's \texttt{libomp}. \texttt{run\_full\_pipeline.py} already
+sets \texttt{KMP\_DUPLICATE\_LIB\_OK=TRUE} and pins XGBoost to one
+thread; if it persists, export
+\texttt{OMP\_NUM\_THREADS=1} in your shell as well.
+
+\item[\texttt{TypeError: a bytes-like object is required, not 'str'}
+on \texttt{pd.read\_hdf}]\quad This pandas/PyTables bug is patched
+in \texttt{src/data\_utils.py}: it reads HDF5 directly with
+PyTables and decodes block-column metadata by hand.
+
+\item[\texttt{FileNotFoundError: data/train.h5}]\quad Run
+\texttt{python3 download\_data.py}.
+
+\item[\texttt{Killed} / OOM during data prep]\quad Lower the
+\texttt{SUBSET\_*} values in \texttt{config.py}, or pass
+\texttt{--max-particles 50}.
+\end{description}
+
+% ----------------------------------------------------------------
+\section{Suggested student exercises}\label{sec:exercises}
+
+\begin{enumerate}
+\item \textbf{Mass-decorrelation.}  Modify the BDT to mask out the
+      \texttt{jet\_mass} feature. By how much does AUC drop? Plot
+      the new ROC against the old one.
+\item \textbf{Robustness to constituent count.}  Restrict
+      \texttt{--max-particles} to $20$, $50$, $100$. How does the
+      Transformer scale compared to ParticleNet?
+\item \textbf{Try a fifth model.}  Implement a simple Deep Sets
+      baseline (per-particle MLP + sum pooling) and add it to the
+      learning-curve plot.
+\item \textbf{Re-do calibration with isotonic regression.}
+      Implement post-hoc isotonic calibration (using
+      \texttt{sklearn.isotonic.IsotonicRegression}) and compare its
+      ECE against the temperature rescaling.
+\item \textbf{Pile-up robustness.}  Smear constituent $p_T$'s with
+      a Gaussian kernel and re-evaluate. Which model degrades
+      least?
+\end{enumerate}
+
+\section*{Further reading}
+\begin{itemize}
+    \item Kasieczka \emph{et al.}, ``The Machine Learning landscape
+          of top taggers'', SciPost Phys.\ 7 (2019) 014 ---
+          benchmark survey.
+    \item Qu and Gouskos, ``ParticleNet: Jet Tagging via Particle
+          Clouds'', Phys.\ Rev.\ D 101 (2020) 056019.
+    \item Qu, Li and Qian, ``Particle Transformer for Jet
+          Tagging'', ICML 2022, arXiv:2202.03772.
+    \item Guo \emph{et al.}, ``On Calibration of Modern Neural
+          Networks'', ICML 2017, arXiv:1706.04599.
+\end{itemize}
+
+\end{document}

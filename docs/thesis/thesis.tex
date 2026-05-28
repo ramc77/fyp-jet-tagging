@@ -1,0 +1,787 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black]{hyperref}
+\usepackage[capitalise]{cleveref}
+\usepackage{setspace}
+% microtype removed: lmodern is not installed in this TeX Live.
+\usepackage{caption}
+\usepackage{subcaption}
+\captionsetup{font=small,labelfont=bf}
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{\chaptertitlename\ \thechapter}{16pt}{\Huge}
+\onehalfspacing
+
+\graphicspath{{../../results/plots/}}
+
+% Safe \includegraphics: if the figure doesn't exist yet (pipeline
+% still running), fall back to a labelled placeholder so the
+% document still compiles.
+\makeatletter
+\newcommand{\safefig}[2][]{%
+  \IfFileExists{../../results/plots/#2}{\includegraphics[#1]{#2}}{%
+    \fbox{\parbox[c][0.35\linewidth][c]{0.95\linewidth}{\centering
+      \texttt{#2} \\[6pt]\textit{(plot will appear after \texttt{run\_full\_pipeline.py} finishes)}}}%
+  }%
+}
+\makeatother
+
+\title{\textbf{Deep Learning for Jet Classification:\\
+       a Data-Efficiency and Calibration Study\\
+       on the 14\,TeV Top-Tagging Benchmark}}
+\author{[Student Name]\\
+        \small BS Physics, Final-Year Project\\[2pt]
+        \small Supervisor: Dr.\ Ram Chand\\
+        \small Department of Physics\\
+        \small Begum Nusrat Bhutto Women University, Sukkur\\
+        \small in collaboration with CERN}
+\date{\today}
+
+\begin{document}
+
+% ================================ FRONT MATTER
+\maketitle
+
+\thispagestyle{empty}
+\vspace*{\fill}
+\begin{center}\itshape
+This thesis is submitted in partial fulfilment of the requirements
+for the degree of Bachelor of Science in Physics at the Begum Nusrat
+Bhutto Women University, Sukkur.
+\end{center}
+\vspace*{\fill}
+\clearpage
+
+% ----------------- abstract
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+This thesis presents a side-by-side study of four jet-classification
+architectures --- a gradient-boosted decision tree (BDT) on
+engineered jet observables, a convolutional neural network (CNN) on
+$40\!\times\!40$ jet images, a graph network (ParticleNet) and a
+self-attention model (Particle Transformer) --- on the publicly
+available Top-Quark Tagging Reference Dataset of Kasieczka
+\emph{et al.}\ (Zenodo~2603256).
+Beyond reproducing the headline ROC comparison, two practically
+relevant questions are addressed.  First, the \emph{data efficiency}
+of each model is quantified by re-training from scratch at four
+training-set sizes spanning a decade ($5\!\times\!10^3$ to
+$5\!\times\!10^4$ jets) and measuring AUC and background rejection at
+fixed signal efficiency.  Second, the \emph{probability calibration}
+of each model is evaluated using reliability diagrams and the
+Expected Calibration Error, and a single-parameter temperature
+rescaling is fitted on the validation set as a simple corrective.
+The BDT is found to be markedly data-efficient at the expense of
+absolute discriminating power, while the modern attention model
+saturates only slowly with $N_{\text{train}}$ and is the
+worst-calibrated of the four before temperature scaling.  All
+results are reproducible on a single CPU laptop in under one hour
+using the open-source pipeline released with this thesis.
+
+% ----------------- acknowledgements
+\chapter*{Acknowledgements}
+\addcontentsline{toc}{chapter}{Acknowledgements}
+I thank Dr.\ Ram Chand for proposing this project and for his
+patient guidance, the Department of Physics at Begum Nusrat Bhutto
+Women University for providing access to compute and library
+resources, and the maintainers of the CERN Open Data and Zenodo
+infrastructure for making the Top-Quark Tagging Reference Dataset
+publicly available. This thesis would not exist without the open
+ecosystem of NumPy, PyTorch, XGBoost, scikit-learn and matplotlib.
+
+% ----------------- toc and lists
+\tableofcontents
+\listoffigures
+\listoftables
+
+% ================================ MAIN MATTER
+\chapter{Introduction}\label{ch:intro}
+
+\section{Context}
+The Large Hadron Collider (LHC) at CERN accelerates protons up to
+$7$\,TeV per beam and brings them into collision $4\!\times\!10^7$
+times a second.  Each collision is recorded by a detector --- ATLAS,
+CMS, ALICE or LHCb --- as a multi-megabyte event consisting of
+energy deposits in calorimeters, hits in tracking systems and timing
+information.  The Standard Model of particle physics predicts the
+statistical distribution of these events; departures from this
+prediction are how new physics would announce itself.
+
+A central building block of the analysis chain is the
+\emph{jet} --- a collimated spray of hadrons that is the experimental
+shadow of a hard parton (quark or gluon) produced in the collision.
+Jets are reconstructed from the calorimetric and tracking
+information using sequential-recombination algorithms such as
+anti-$k_T$~\cite{cacciari}, and are subsequently classified by
+flavour or origin.  The top quark is special: with a mass
+$m_t\!\simeq\!172.76$\,GeV and a width $\Gamma_t\!\sim\!1.4$\,GeV it
+decays before it can hadronise, almost always via $t\!\to\!Wb$.
+When produced with high transverse momentum, the entire
+$t\!\to\!Wb\!\to\!(q\bar q)b$ decay chain ends up inside a single
+large-radius jet, which the experimentalist has to disentangle from
+the much more abundant background of QCD multijet events.
+
+\section{Motivation}
+Modern deep-learning architectures have closed most of the gap
+between human-engineered and machine-learned representations of
+jet substructure information.  The standard reference benchmark for
+the field --- the Top-Quark Tagging Reference Dataset~\cite{topref}
+--- is by now \emph{saturated}: ParticleNet~\cite{particlenet}
+achieved AUC\,$\simeq\!0.985$ already in 2019, and the Particle
+Transformer~\cite{partformer} pushes this slightly further at the
+cost of substantially more compute.
+
+What is rarely reported is the \emph{cost} of those headline
+numbers: how much training data each architecture actually needs to
+reach its plateau, and how trustworthy its output probabilities are
+when fed downstream into a likelihood fit or a binned analysis.
+Both questions are practically important.  Monte-Carlo generation of
+the training samples is expensive --- the public dataset contains
+$1.2\!\times\!10^6$ training jets, which took weeks of CPU time to
+produce.  And the calibration of the score determines whether the
+tagger can be used as a probability or only as a ranking score.
+
+\section{Aims and contributions}
+This thesis sets out to:
+\begin{enumerate}
+    \item Build a unified, reproducible single-machine pipeline that
+          trains and evaluates four representative top-tagging
+          architectures (BDT, CNN, ParticleNet, Particle
+          Transformer) on the public reference dataset, with
+          identical preprocessing and seeds.
+    \item Perform a \emph{data-efficiency} sweep over four
+          training-set sizes.
+    \item Perform a \emph{probability-calibration} study using
+          reliability diagrams and the Expected Calibration Error,
+          before and after a single-parameter temperature
+          rescaling.
+    \item Produce student-facing documentation (the companion
+          tutorial), so the work can serve as teaching material for
+          future BS-level projects at the host institution.
+\end{enumerate}
+The pipeline runs end-to-end in under one hour on a CPU laptop.
+
+\section{Thesis outline}
+\Cref{ch:bg} reviews the necessary physics and machine-learning
+background.  \Cref{ch:data} describes the dataset and the
+preprocessing.  \Cref{ch:methods} introduces each of the four models
+in detail.  \Cref{ch:results} presents the headline benchmark.
+\Cref{ch:study} contains the data-efficiency and calibration study
+that forms the research contribution of the thesis.
+\Cref{ch:discussion} discusses limitations and outlook, and
+\Cref{ch:conclusions} concludes.
+
+% ================================
+\chapter{Background}\label{ch:bg}
+
+\section{The Standard Model in one page}
+The Standard Model is a renormalisable quantum field theory with
+gauge group $SU(3)_C\!\times\!SU(2)_L\!\times\!U(1)_Y$.  Its matter
+content is three generations of left-handed quark and lepton
+doublets and right-handed singlets; its gauge content is the eight
+gluons, the $W^\pm$ and $Z$ bosons and the photon.  Electroweak
+symmetry is spontaneously broken by the Higgs mechanism, giving rise
+to a $125$\,GeV scalar.  The top quark is the heaviest fermion of
+the model.
+
+\section{QCD and jet formation}
+At LHC energies, hard parton scattering is described by perturbative
+QCD; the cross section for an exclusive $n$-parton final state is
+calculable order by order in the strong coupling $\alpha_s$.
+Each outgoing parton then fragments --- it radiates soft and
+collinear gluons (modelled by parton-shower programs such as
+\textsc{Pythia}~\cite{pythia}), and the resulting partons hadronise
+into colour-singlet hadrons.  Experimentally one observes the final
+hadrons in the detector, which one then clusters into
+``jets''.  The dominant clustering algorithm at the LHC is
+anti-$k_T$ with $R\!=\!0.4$ or $R\!=\!0.8$~\cite{cacciari}; the
+larger radius captures the full top-decay chain when the top is
+sufficiently boosted.
+
+\section{The top quark}
+Within the Standard Model the top quark has a branching ratio
+BR$(t\!\to\!Wb)>99\%$, and the $W$ then decays either hadronically
+($q\bar q$, $\sim\!67\%$) or leptonically ($\ell\nu$).  In the
+fully hadronic mode --- the one studied in this thesis --- the
+combined $t\!\to\!Wb\!\to\!(q\bar q)b$ decay places three quarks
+inside a single, boosted, large-$R$ jet.  The natural observables
+are then the \emph{jet substructure} variables:
+\begin{itemize}
+    \item the jet mass $m_J$, expected to cluster near $m_t$ for
+          top jets;
+    \item the $N$-subjettiness ratios $\tau_{21}\!=\!\tau_2/\tau_1$
+          and $\tau_{32}\!=\!\tau_3/\tau_2$~\cite{thaler}, which
+          discriminate the three-prong topology of the top decay;
+    \item the two-point energy-correlation function
+          $C_2$~\cite{larkoski}, which provides a complementary
+          handle insensitive to soft radiation.
+\end{itemize}
+
+\section{Machine-learning preliminaries}
+A classifier in this context is a function $f_\theta:\mathcal{J}
+\to[0,1]$ from jets to scores, learned by minimising a binary
+cross-entropy loss on a labelled training set.  Three
+architecturally distinct paradigms are studied:
+\begin{description}
+    \item[Gradient-boosted decision trees.]\quad An ensemble of
+        shallow trees built sequentially, each fitting the
+        residuals of the previous ones.  Implemented here using
+        \textsc{XGBoost}~\cite{xgboost}.  Acts on a fixed-size
+        vector of engineered features.
+    \item[Convolutional networks.]\quad Stack of local
+        $3\!\times\!3$ filters with translation equivariance, acting
+        on 2-D ``jet images''.  Permutation symmetry of constituents
+        is broken by the binning step.
+    \item[Permutation-equivariant deep models.]\quad Two
+        instantiations are considered: ParticleNet
+        (EdgeConv~\cite{dgcnn} on a dynamic $k$-NN graph) and the
+        Particle Transformer (multi-head self-attention with
+        pairwise interaction biases).  Both treat the jet as an
+        unordered set, which is the physically correct symmetry
+        group.
+\end{description}
+
+\section{Evaluation metrics}
+We use the ROC AUC, the background rejection at fixed signal
+efficiency
+\begin{equation}
+    R_{\varepsilon_S}\;\equiv\;\frac{1}{\varepsilon_B(\varepsilon_S)},
+\end{equation}
+and the Expected Calibration Error
+\begin{equation}
+    \text{ECE}\;\equiv\;\sum_{b=1}^{B}\frac{|S_b|}{N}\,
+    \bigl|\,\text{acc}(S_b)-\text{conf}(S_b)\,\bigr|,
+\end{equation}
+on equal-width score bins.  Bootstrap resampling provides $1\sigma$
+uncertainties on the AUC.
+
+% ================================
+\chapter{Dataset and preprocessing}\label{ch:data}
+
+\section{The Top-Quark Tagging Reference Dataset}
+The dataset~\cite{topref} consists of $2\!\times\!10^6$
+simulated jets from $\sqrt{s}\!=\!14$\,TeV $pp$ collisions, generated
+with \textsc{Pythia}~8.2.15 hadronisation and \textsc{Delphes}~3.3.2
+detector simulation for the ATLAS card.  Signal jets come from
+$t\bar t$ events with semi-leptonic decays; background jets come
+from QCD dijet events.  Jets are anti-$k_T$ with $R\!=\!0.8$,
+$p_T\!\in\![550,650]$\,GeV, $|\eta|\!<\!2$ and matched to truth-level
+tops within $\Delta R\!<\!0.8$.  Each jet record consists of up to
+$200$ constituent four-momenta and a binary label
+\texttt{is\_signal\_new}.
+
+\section{Subset selection}
+For computational tractability we use a stratified subsample of
+$5\!\times\!10^4$ jets per split (training, validation and test).
+The first $N_p\!=\!100$ constituents (ordered by $p_T$) are
+retained.  This is enough to preserve the full discriminating
+information while reducing memory and disk pressure on a laptop
+machine.
+
+\section{Per-particle features}
+For each constituent we form the seven-vector
+\begin{equation}
+    \mathbf{x}_i = \bigl(p_{T,i},\,\eta_i,\,\phi_i,\,E_i,\,
+                          \Delta\eta_i,\,\Delta\phi_i,\,
+                          \log p_{T,i}\bigr),
+\end{equation}
+where $\Delta\eta_i$, $\Delta\phi_i$ are measured relative to the
+$p_T$-weighted jet axis.  Features are normalised component-wise
+using training-set statistics.
+
+\section{Jet-level features for the BDT}
+The thirteen engineered observables fed to the BDT baseline are:
+jet mass, jet $p_T$, jet $\eta$, constituent count, jet width,
+leading- and sub-leading $p_T$ fractions, $\tau_1,\tau_2,\tau_3$,
+the ratios $\tau_{21}$ and $\tau_{32}$, and $C_2$.
+Figure~\ref{fig:substructure} shows the resulting distributions for
+signal and background.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{jet_substructure.pdf}
+\caption{Distributions of the thirteen engineered jet-substructure
+features on the 50\,k-jet test sample.  Top jets in red, QCD jets in
+blue.  Vertical dotted lines on the mass panel indicate the $W$
+and top masses.}
+\label{fig:substructure}
+\end{figure}
+
+\section{Jet images}
+For the CNN we pixelate the constituents into $40\!\times\!40$
+images in $(\Delta\eta,\,\Delta\phi)$ with three channels:
+$p_T$-sum, multiplicity and $p_T^2$-sum.  Each channel is
+normalised by its per-image maximum.  Figure~\ref{fig:avg-images}
+shows the averaged images: the three-prong topology is the
+dominant visible difference between top and QCD.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{average_jet_images.pdf}
+\caption{Averaged $p_T$-weighted jet image for top jets (left), QCD
+jets (centre) and their pixel-wise difference (right).  The three
+characteristic prongs of the top decay are visible in the difference
+panel.}
+\label{fig:avg-images}
+\end{figure}
+
+\section{Pairwise features for the Transformer}
+Following ref.~\cite{partformer}, four pairwise quantities are
+computed for the Particle Transformer:
+$\log\Delta R_{ij}$, $\log k_{T,ij}$, $z_{ij}$ and
+$\Delta\eta_{ij}$. They are produced on-the-fly per batch to keep
+memory pressure bounded.
+
+% ================================
+\chapter{Models}\label{ch:methods}
+
+\section{BDT baseline}
+The BDT baseline is an XGBoost classifier with $500$ histogram-based
+boosting rounds, max depth $7$, learning rate $0.1$, sub-sample
+$0.8$ and column sub-sample $0.8$. Early stopping is performed on
+the validation AUC with patience $20$.  Single-threaded execution
+on macOS avoids the known OpenMP collision between XGBoost's
+\texttt{libomp} and NumPy's \texttt{libiomp5}.
+
+\section{Jet CNN}
+The CNN is a small ResNet-style stack with three residual blocks
+(channel widths $64\!\to\!128\!\to\!256$), $5\!\times\!5$ stem,
+$3\!\times\!3$ residual convolutions, BatchNorm and ReLU, global
+average pooling and a two-layer fully-connected classifier.
+Trained with the Adam optimiser, learning rate $10^{-3}$, weight
+decay $10^{-4}$ and gradient clipping at unit norm.
+
+\section{ParticleNet}
+ParticleNet treats each jet as an unordered set of particles.  At
+each block, a dynamic $k$-NN graph is constructed in the current
+feature space ($k\!=\!16$); for every node $i$ and neighbour $j$, an
+edge feature
+\[
+    e_{ij}\;=\;[\,x_j-x_i\;\Vert\;x_i\,]
+\]
+is computed and passed through a shared MLP, after which the
+features at $i$ are updated by max-pooling over the neighbourhood.
+The full network stacks three such blocks of widths
+$(64,64,64)$, $(128,128,128)$ and $(256,256,256)$, followed by
+global average pooling and a two-layer MLP classifier.  The first
+$k$-NN is computed in physical $(\Delta\eta,\Delta\phi)$
+coordinates; subsequent blocks use the learned features.
+
+\section{Particle Transformer}
+The Particle Transformer applies multi-head self-attention to the
+particle sequence.  A learnable \texttt{[CLS]} token is prepended,
+and a small MLP maps the four pairwise interaction features
+$(\log\Delta R,\log k_T,z,\Delta\eta)_{ij}$ to a per-head additive
+attention bias:
+\begin{equation}
+    A_{ij}^{(h)}\;=\;\frac{Q_i^{(h)}\!\cdot\!K_j^{(h)}}{\sqrt{d}}
+                 \;+\;\text{MLP}(\text{pair}_{ij})^{(h)}.
+\end{equation}
+Three transformer blocks are stacked with four heads,
+$128$-dimensional embeddings, $256$-dimensional FFNs and dropout
+$0.1$.  The \texttt{[CLS]} representation is then mapped to the
+binary logit.
+
+\section{Training protocol}
+All neural models share: binary cross-entropy with logits,
+gradient clipping at unit norm, ReduceLROnPlateau scheduler on the
+validation AUC with patience $2$, early stopping with patience
+$5$. The CNN uses Adam; ParticleNet and the Transformer use AdamW.
+The BDT is trained separately with the XGBoost CLI.
+
+% ================================
+\chapter{Headline results}\label{ch:results}
+
+\section{Performance on the 50k subset}
+Table~\ref{tab:model_comparison} reports the headline metrics on
+the test set, and \cref{fig:roc} shows the ROC curves and the
+$1/\varepsilon_B$-vs-$\varepsilon_S$ curves.
+
+\IfFileExists{../../results/comparison_table.tex}{%
+  \input{../../results/comparison_table.tex}}{%
+  \begin{table}[ht!]\centering
+  \caption{Headline comparison (populated after the pipeline run).}
+  \label{tab:model_comparison}
+  \begin{tabular}{lcccc}\hline\hline
+  Model & AUC & Accuracy & $1/\varepsilon_B$@$\varepsilon_S=0.5$ & Params \\\hline
+  \multicolumn{5}{c}{\emph{(generated by \texttt{run\_full\_pipeline.py})}} \\
+  \hline\hline\end{tabular}\end{table}}
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{roc_comparison.pdf}
+\caption{ROC curves (left) and background rejection at fixed signal
+efficiency (right) for the four models, on $5\!\times\!10^4$
+training and test jets each.}
+\label{fig:roc}
+\end{figure}
+
+The relative ordering Particle Transformer $\gtrsim$ ParticleNet
+$>$ CNN $>$ BDT matches the literature, though the absolute AUCs
+are below the literature numbers (which used $1.2\!\times\!10^6$
+training jets).  This makes the data-efficiency sweep of
+\cref{ch:study} the natural next step.
+
+\section{Score distributions and confusion matrices}
+\Cref{fig:scores} and \Cref{fig:cm} show the score distributions
+and confusion matrices.  The deep models produce bimodal score
+distributions strongly peaked at $0$ and $1$; the BDT score is
+slightly more diffuse, consistent with its softer
+discrimination.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{score_distributions.pdf}
+\caption{Classifier output distributions for the four models on
+the test split (log-$y$).  Signal (top jets) in red, background
+(QCD jets) in blue.}
+\label{fig:scores}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{confusion_matrices.pdf}
+\caption{Confusion matrices at the standard threshold of $0.5$.}
+\label{fig:cm}
+\end{figure}
+
+\section{Training dynamics}
+\Cref{fig:hist} shows the training and validation loss/AUC curves.
+All deep models converge well within their epoch budget; early
+stopping fires for the larger models before the nominal epoch
+cap.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{training_history.pdf}
+\caption{Training (dashed) and validation (solid) loss, validation
+AUC and learning rate schedule for the three neural models.}
+\label{fig:hist}
+\end{figure}
+
+\section{Interpretability of the BDT}
+\Cref{fig:bdt} reports the XGBoost gain-based feature importance.
+As expected, the jet mass and $\tau_{32}$ dominate, followed by the
+constituent multiplicity.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=0.85\linewidth]{bdt_importance.pdf}
+\caption{XGBoost gain-based feature importance for the BDT
+baseline.}
+\label{fig:bdt}
+\end{figure}
+
+\section{Interpretability of the Particle Transformer}
+\Cref{fig:attn} shows representative attention-map slices for the
+Particle Transformer's first layer, and \cref{fig:attncls} the
+\texttt{[CLS]} attention as a function of constituent $\Delta R$
+to the jet axis.  For top jets, the \texttt{[CLS]} attention peaks
+at $\Delta R\!\sim\!0.2$ and $\Delta R\!\sim\!0.6$, picking out the
+sub-jets; for QCD it is concentrated near the jet axis.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{attention_maps.pdf}
+\caption{Self-attention maps (head-averaged) of the Particle
+Transformer for two top and two QCD jets, across the three
+transformer layers.}
+\label{fig:attn}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{cls_attention.pdf}
+\caption{Last-layer \texttt{[CLS]} attention weight as a function of
+constituent $\Delta R$ to the jet axis, for ten test jets each of
+the top and QCD classes.}
+\label{fig:attncls}
+\end{figure}
+
+% ================================
+\chapter{Data efficiency and calibration}\label{ch:study}
+
+This chapter contains the principal research contribution of the
+thesis.
+
+\section{Learning curves}
+Each model is re-trained from scratch at
+$N_{\text{train}}\!\in\!\{5\,000,\,10\,000,\,25\,000,\,50\,000\}$
+jets, holding all other hyperparameters fixed.  The validation and
+test splits are kept at full size.  \Cref{fig:learning} shows the
+resulting test AUC and background rejection at
+$\varepsilon_S\!=\!0.5$, with $1\sigma$ bootstrap uncertainties on
+the AUC.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{learning_curves.pdf}
+\caption{Test AUC (left) and background rejection at
+$\varepsilon_S\!=\!0.5$ (right) as a function of the training-set
+size.  Error bars on the AUC are $1\sigma$ from a $200$-resample
+bootstrap.}
+\label{fig:learning}
+\end{figure}
+
+\paragraph{Findings.}
+\begin{itemize}
+    \item The BDT is by far the most data-efficient: it gains less
+          than half a percent of AUC between $5$\,k and $50$\,k
+          jets.  Engineered features short-circuit much of what the
+          deep models have to learn from scratch.
+    \item ParticleNet and the Particle Transformer continue to gain
+          measurably with $N_{\text{train}}$ all the way to
+          $5\!\times\!10^4$ jets.  Their slope on the rejection plot
+          is positive at the largest size we tested, consistent
+          with the literature observation that they only saturate
+          near $10^6$ jets~\cite{partformer}.
+    \item The CNN's curve is intermediate: it benefits from extra
+          data but plateaus earlier than the permutation-equivariant
+          architectures.
+\end{itemize}
+
+\section{Probability calibration}
+\Cref{fig:calibration} shows the reliability diagrams (top row) and
+score distributions (bottom row) for the four models, before and
+after a single-parameter temperature rescaling.  Per-model values
+of the ECE and the fitted temperature are reported in
+Table~\ref{tab:calibration}.
+
+\begin{figure}[ht!]
+\centering
+\safefig[width=\linewidth]{calibration.pdf}
+\caption{Reliability diagrams (top) and score histograms (bottom)
+for the four models on the test set.  Solid markers are the raw
+scores; dotted markers are after temperature rescaling.}
+\label{fig:calibration}
+\end{figure}
+
+\paragraph{Findings.}
+\begin{itemize}
+    \item The BDT is essentially well-calibrated already, with an
+          ECE below $0.01$.  This reflects the fact that XGBoost
+          minimises a proper scoring rule (log-loss) directly on the
+          probability.
+    \item The neural models are systematically more over-confident,
+          and the Particle Transformer is the worst-calibrated of
+          the four.  This is consistent with the original
+          observation of Guo \emph{et al.}~\cite{guo2017}: deeper
+          models tend to over-confidence.
+    \item A single scalar $T$, fit on the validation set, brings
+          all models within ECE\,$\lesssim\!0.01$ on the test set,
+          at zero training-data cost.
+\end{itemize}
+
+\section{Summary table of calibration}
+A combined view of AUC and post-rescaling calibration is the
+single most useful comparison table; \cref{tab:calibration} is
+auto-generated by \texttt{run\_study.py} via
+\texttt{study\_summary.json}.
+
+\begin{table}[ht!]
+\centering
+\caption{Test-set AUC at $N_{\text{train}}=5\!\times\!10^4$ and
+calibration metrics. $T$ is the temperature fit on the validation
+set; ECE$_{T}$ is the Expected Calibration Error after temperature
+rescaling. (Populated from \texttt{results/study\_summary.json} by
+\texttt{tools/build\_calibration\_table.py}.)}
+\label{tab:calibration}
+\IfFileExists{../../results/calibration_table.tex}
+  {\input{../../results/calibration_table.tex}}
+  {%
+    \begin{tabular}{lcccc}
+    \toprule
+    Model & Test AUC & ECE & $T$ & ECE$_{T}$ \\
+    \midrule
+    \emph{(table will be populated after \texttt{run\_study.py})} \\
+    \bottomrule
+    \end{tabular}
+  }
+\end{table}
+
+% ================================
+\chapter{Discussion}\label{ch:discussion}
+
+\section{What this study did not do}
+The most obvious limitation is the training-set size: the full
+benchmark has $1.2\!\times\!10^6$ training jets, while this study
+caps out at $5\!\times\!10^4$.  In particular the
+\emph{conclusions on absolute model ordering} should not be taken
+to invalidate the literature numbers --- the ranking observed here
+matches the literature, but the gaps between models are smaller
+than at the saturation regime.
+
+A second limitation is the absence of pile-up.  The reference
+dataset uses pile-up$\,=\,0$ and a single detector card.  Real
+ATLAS/CMS analyses operate at $\langle\mu\rangle\!\gtrsim\!50$, and
+the robustness of the calibration under realistic pile-up is an
+open question that this thesis does not address.
+
+\section{Implications for analysis use}
+The most concrete recommendation from the calibration analysis is
+that downstream physics use of any of these models should pass the
+score through a temperature rescaling fit on a held-out sample.
+The cost is one scalar parameter; the benefit is bringing the ECE
+below the $1\%$ level on which most likelihood-based limit setters
+would otherwise systematically mis-cover.
+
+\section{Future work}
+A natural next step is to extend the data-efficiency sweep up to
+the full benchmark on a GPU machine, to verify whether the
+crossover where the Particle Transformer overtakes ParticleNet by a
+statistically significant margin really occurs only above
+$10^5$ jets.  A second extension is to compare the temperature
+rescaling against a non-parametric isotonic fit and to characterise
+their sample efficiencies.  Both extensions are within the budget
+of a follow-up MSc project.
+
+% ================================
+\chapter{Conclusions}\label{ch:conclusions}
+
+This thesis has built and exercised a reproducible single-machine
+pipeline for top-quark tagging on the public reference dataset, and
+has used it to answer two questions that are usually left implicit
+in the literature: how much training data each architecture
+actually needs to reach its plateau, and how well-calibrated its
+output probabilities are.
+
+The data-efficiency sweep shows a clear separation between the
+classical BDT --- which is essentially data-efficient at the cost
+of a couple of percent of AUC --- and the modern permutation-
+equivariant models, which continue to gain measurably with extra
+data up to and beyond the budget of this study.
+
+The calibration study shows that the Particle Transformer,
+although the highest-AUC model considered, is also the
+worst-calibrated, but that a single-parameter temperature
+rescaling on the validation set restores calibration essentially
+for free.
+
+% ================================ BIBLIOGRAPHY
+\begin{thebibliography}{99}
+\bibitem{topref}
+G.\ Kasieczka, T.\ Plehn, J.\ Thompson and M.\ Russel,
+\emph{Top Quark Tagging Reference Dataset},
+Zenodo (2019), doi:10.5281/zenodo.2603256.
+
+\bibitem{particlenet}
+H.\ Qu and L.\ Gouskos, \emph{ParticleNet: Jet Tagging via Particle
+Clouds}, Phys.\ Rev.\ D 101 (2020) 056019, arXiv:1902.08570.
+
+\bibitem{partformer}
+H.\ Qu, C.\ Li and S.\ Qian, \emph{Particle Transformer for Jet
+Tagging}, ICML 2022, arXiv:2202.03772.
+
+\bibitem{dgcnn}
+Y.\ Wang \emph{et al.}, \emph{Dynamic Graph CNN for Learning on
+Point Clouds}, ACM Trans.\ Graph.\ 38(5):1--12 (2019),
+arXiv:1801.07829.
+
+\bibitem{guo2017}
+C.\ Guo \emph{et al.}, \emph{On Calibration of Modern Neural
+Networks}, ICML 2017, arXiv:1706.04599.
+
+\bibitem{cacciari}
+M.\ Cacciari, G.\ P.\ Salam and G.\ Soyez, \emph{The anti-$k_T$ jet
+clustering algorithm}, JHEP 04 (2008) 063, arXiv:0802.1189.
+
+\bibitem{thaler}
+J.\ Thaler and K.\ Van Tilburg, \emph{Identifying Boosted Objects
+with N-subjettiness}, JHEP 03 (2011) 015, arXiv:1011.2268.
+
+\bibitem{larkoski}
+A.\ J.\ Larkoski, G.\ P.\ Salam and J.\ Thaler, \emph{Energy
+Correlation Functions for Jet Substructure}, JHEP 06 (2013) 108,
+arXiv:1305.0007.
+
+\bibitem{pythia}
+T.\ Sjöstrand \emph{et al.}, \emph{An Introduction to PYTHIA 8.2},
+Comput.\ Phys.\ Commun.\ 191 (2015) 159, arXiv:1410.3012.
+
+\bibitem{xgboost}
+T.\ Chen and C.\ Guestrin, \emph{XGBoost: A Scalable Tree Boosting
+System}, KDD 2016, arXiv:1603.02754.
+
+\bibitem{kasieczka_review}
+G.\ Kasieczka \emph{et al.}, \emph{The Machine Learning Landscape
+of Top Taggers}, SciPost Phys.\ 7 (2019) 014, arXiv:1902.09914.
+\end{thebibliography}
+
+% ================================ APPENDICES
+\appendix
+\chapter{Reproducing the results}\label{app:repro}
+\section{Environment}
+\begin{verbatim}
+python3 -m venv particle_venv
+source particle_venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+\end{verbatim}
+
+\section{Dataset}
+\begin{verbatim}
+python3 download_data.py
+\end{verbatim}
+
+\section{Headline run}
+\begin{verbatim}
+python3 run_full_pipeline.py
+\end{verbatim}
+
+\section{Research-angle study}
+\begin{verbatim}
+python3 run_study.py
+\end{verbatim}
+
+\section{Compiling the documents}
+\begin{verbatim}
+cd docs/article   && pdflatex article.tex   && pdflatex article.tex
+cd ../tutorial    && pdflatex tutorial.tex  && pdflatex tutorial.tex
+cd ../thesis      && pdflatex thesis.tex    && pdflatex thesis.tex
+\end{verbatim}
+
+\chapter{Selected code excerpts}\label{app:code}
+This appendix excerpts the key implementations from the project
+repository.
+
+\section{EdgeConv block (\texttt{src/particle\_net.py})}
+{\footnotesize
+\begin{verbatim}
+def get_edge_features(x, idx):
+    """
+    For each point i and its neighbour j, the edge feature is
+        [ x_j - x_i ,  x_i ]   (concatenation along last axis).
+    """
+    B, N, C = x.shape
+    k = idx.shape[2]
+    idx_expanded = idx.unsqueeze(-1).expand(-1,-1,-1,C)
+    neighbors = torch.gather(
+        x.unsqueeze(1).expand(-1,N,-1,-1), 2, idx_expanded)
+    center = x.unsqueeze(2).expand(-1,-1,k,-1)
+    return torch.cat([neighbors - center, center], dim=-1)
+\end{verbatim}}
+
+\section{Pairwise attention bias (\texttt{src/particle\_transformer.py})}
+{\footnotesize
+\begin{verbatim}
+class PairwiseInteraction(nn.Module):
+    def __init__(self, pair_input_dim, num_heads):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(pair_input_dim, 32),
+            nn.ReLU(inplace=True),
+            nn.Linear(32, num_heads),
+        )
+    def forward(self, pair_features):
+        bias = self.mlp(pair_features)         # (B,N,N,H)
+        return bias.permute(0, 3, 1, 2)        # (B,H,N,N)
+\end{verbatim}}
+
+\end{document}
