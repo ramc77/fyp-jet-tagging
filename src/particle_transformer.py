@@ -126,8 +126,11 @@ class MultiHeadAttention(nn.Module):
 
         # Apply mask: set padded positions to -inf
         if mask is not None:
-            # mask: (B, N) → (B, 1, 1, N) for broadcasting
-            attn_mask = ~mask.unsqueeze(1).unsqueeze(2)  # True where padded
+            # mask: (B, N) → (B, 1, 1, N) for broadcasting. The dataset
+            # supplies the mask as float (1.0 = real particle, 0.0 = pad),
+            # so use an equality test rather than bitwise-NOT (~), which
+            # only works on bool/int tensors.
+            attn_mask = (mask == 0).unsqueeze(1).unsqueeze(2)  # True where padded
             attn_logits = attn_logits.masked_fill(attn_mask, float("-inf"))
 
         attn_weights = F.softmax(attn_logits, dim=-1)
@@ -301,8 +304,10 @@ if __name__ == "__main__":
 
     B, N = 4, 100
     features = torch.randn(B, N, 7)
-    mask = torch.ones(B, N, dtype=torch.bool)
-    mask[:, 60:] = False
+    # Use a FLOAT mask here — this is what the real ParticleDataset feeds
+    # the model. (A bool mask would mask the ~ operator bug that floats hit.)
+    mask = torch.ones(B, N, dtype=torch.float32)
+    mask[:, 60:] = 0.0
     pair = torch.randn(B, N, N, 4)
 
     logits, attn_maps = model(features, mask, pair)
