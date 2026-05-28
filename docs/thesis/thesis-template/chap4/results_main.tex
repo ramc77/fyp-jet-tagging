@@ -168,8 +168,14 @@ Expected Calibration Error after rescaling.}
 \label{sec:res_interpret}
 
 Two views of \emph{why} the models work are useful. Figure~\ref{fig:bdt_imp}
-shows the BDT feature importances: the jet mass, $\tau_{32}$ and constituent
-multiplicity dominate, exactly the physically expected discriminators.
+shows the BDT feature importances: the jet mass (gain $118$), the
+$1$-subjettiness $\tau_1$ ($89$) and the jet width ($76$) dominate, followed
+by the constituent multiplicity ($15$) --- all sensitive to the larger mass,
+girth and prong count of top jets. The canonical ratio $\tau_{32}$ ranks
+lower (gain $7$): the boosted trees capture the prong information mainly
+through the absolute $\tau_1$ and the jet width rather than the ratio, even
+though $\tau_{32}$ is the cleaner discriminant at the distribution level
+(Fig.~\ref{fig:substructure}).
 Figure~\ref{fig:cls_attn} shows the class-token attention of the Particle
 Transformer versus a constituent's angular distance $\Delta R$ from the jet
 axis. For QCD jets the attention concentrates at small $\Delta R$ (a single
@@ -180,8 +186,8 @@ learned to attend to the peripheral radiation that carries the top signature.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.8\textwidth]{bdt_importance.pdf}
-\caption{Gain-based feature importance of the BDT. The jet mass, $\tau_{32}$
-and constituent multiplicity are the most discriminating variables.}
+\caption{Gain-based feature importance of the BDT. The jet mass, $\tau_1$
+and jet width dominate, followed by the constituent multiplicity.}
 \label{fig:bdt_imp}
 \end{figure}
 

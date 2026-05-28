@@ -265,7 +265,8 @@ ratios \citep{thaler2011}
 \end{equation}
 ($d_0=\sum_k p_{T,k}R_0$, $\Delta R_{a,k}$ the angular distance from
 constituent $k$ to axis $a$) measure compatibility with an $N$-pronged
-hypothesis and are, with the jet mass, the most discriminating features.
+hypothesis and, together with the jet mass and the jet width, rank among the
+most important inputs (Section~\ref{sec:res-interpret}).
 
 \subsection{Convolutional neural network (CNN)}
 \label{sec:cnn}
@@ -363,20 +364,42 @@ rescaling. $T>1$ indicates an over-confident model whose probabilities are
 softened by the rescaling.
 
 %% =====================================================================
-\section{Results}
+\section{Results and Discussion}
 \label{sec:results}
 
 \subsection{Headline benchmark}
-Table~\ref{tab:comparison} and Fig.~\ref{fig:roc} report the headline
-performance. The ordering Particle Transformer ($0.978$) $>$ ParticleNet
-($0.976$) $>$ CNN ($0.972$) $>$ BDT ($0.970$) reproduces the community
-benchmark \citep{kasieczka2019landscape}; absolute values are slightly below
-the published saturation values because we train on a subset rather than the
-full $1.2\times10^{6}$ jets.
+\label{sec:res-headline}
+Table~\ref{tab:comparison} and Fig.~\ref{fig:roc} report the test-set
+performance of the four models trained on $5\times10^{4}$ jets. The ordering
+Particle Transformer ($\mathrm{AUC}=0.978$) $>$ ParticleNet ($0.976$) $>$ CNN
+($0.972$) $>$ BDT ($0.970$) reproduces the community benchmark
+\citep{kasieczka2019landscape}. The same ordering is even sharper in the
+background-rejection metric, which weights the high-purity regime most
+relevant to analyses: at a signal efficiency $\varepsilon_S=0.5$ the
+rejection rises from $1/\varepsilon_B=93$ (BDT) to $136$ (Particle
+Transformer), and at $\varepsilon_S=0.3$ from $287$ to $476$ --- a
+$\sim\!1.6\times$ improvement of the attention model over the engineered-
+feature baseline. The score distributions (Fig.~\ref{fig:scores}) are
+strongly bimodal, peaking near $0$ and $1$, and the separation visibly
+sharpens from the BDT to the deep models; the confusion matrices
+(Fig.~\ref{fig:confusion}) at a threshold of $0.5$ confirm balanced
+signal/background accuracies of $91$--$92\%$.
+
+Our absolute AUCs sit a little below the published full-dataset values
+(ParticleNet and the Particle Transformer reach $\sim\!0.985$ and
+$\sim\!0.986$ respectively when trained on the full $1.2\times10^{6}$ jets
+with larger models and longer schedules
+\citep{qu2020particlenet,qu2022particletransformer}). This is expected: we
+deliberately use a $5\times10^{4}$-jet subset and compute-trimmed
+configurations so the entire study runs on a single free GPU. Crucially, the
+\emph{relative} ordering and the gaps between models are preserved, which is
+what the data-efficiency and calibration analyses below build upon.
 
 \begin{table}[t]
 \centering
-\caption{Headline test-set performance ($5\times10^{4}$-jet training run).}
+\caption{Headline test-set performance ($5\times10^{4}$-jet training run).
+$1/\varepsilon_B^{0.5}$ and $1/\varepsilon_B^{0.3}$ are background rejections
+at signal efficiencies $0.5$ and $0.3$.}
 \label{tab:comparison}
 \small
 \begin{tabular}{lcccc}
@@ -394,37 +417,68 @@ Particle Transformer & 0.978 & 0.925 & 136 & 476 \\
 \begin{figure}[t]
 \centering
 \safefig[width=\linewidth]{roc_comparison.pdf}
-\caption{ROC curves (left) and background rejection vs.\ signal efficiency
-(right).}
+\caption{ROC curves (left) and background rejection $1/\varepsilon_B$ vs.\
+signal efficiency $\varepsilon_S$ (right) for the four models on the test set.}
 \label{fig:roc}
 \end{figure}
 
+\begin{figure}[t]
+\centering
+\safefig[width=\linewidth]{score_distributions.pdf}
+\caption{Classifier-score distributions for top (red) and QCD (blue) jets.
+The bimodal peaks near $0$ and $1$ sharpen from the BDT to the deep models.}
+\label{fig:scores}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\safefig[width=\linewidth]{confusion_matrices.pdf}
+\caption{Normalised confusion matrices at a decision threshold of $0.5$.}
+\label{fig:confusion}
+\end{figure}
+
 \subsection{Data efficiency}
-Re-training each model at
+\label{sec:res-efficiency}
+Re-training each model from scratch at
 $N_{\text{train}}\in\{5,10,25,50\}\times10^{3}$ jets yields the learning
-curves of Fig.~\ref{fig:learning}. The BDT is the most data-efficient (AUC
-$0.961\rightarrow0.968$ across the range), whereas the deep models gain
-strongly and \emph{cross over}: the Particle Transformer is the weakest model
-at $5\times10^{3}$ jets (AUC $0.949$) but the strongest at $5\times10^{4}$
-($0.974$). Under a tight Monte-Carlo budget the simple, interpretable BDT is
-therefore competitive or preferable; the attention model only realises its
-advantage with sufficient data, consistent with its near-$10^{6}$-jet
-saturation \citep{qu2022particletransformer}.
+curves of Fig.~\ref{fig:learning} and Table~\ref{tab:efficiency}. Three
+distinct behaviours emerge. The BDT is the most \emph{data-efficient} model:
+its AUC rises by less than one percent ($0.961\rightarrow0.968$) across the
+whole decade of training sizes, because its inputs are physics-engineered
+observables (Eq.~\ref{eq:nsub}) that already encode a strong inductive bias,
+leaving little for the learner to discover from data. The deep models behave
+oppositely --- they must learn their representations from the raw
+constituents and therefore improve steeply with $N_{\text{train}}$ --- which
+produces a clear \emph{crossover}: the Particle Transformer is the
+\emph{weakest} model at $5\times10^{3}$ jets ($0.949$) but the
+\emph{strongest} at $5\times10^{4}$ ($0.974$), overtaking both the BDT and
+ParticleNet around $N_{\text{train}}\approx2.5\times10^{4}$. The CNN is
+intermediate: it benefits from data but plateaus earlier than the
+permutation-equivariant models, consistent with the information lost in the
+pixelisation step. The background-rejection panel of Fig.~\ref{fig:learning}
+tells the same story with a steeper slope, and the bootstrap uncertainties in
+Table~\ref{tab:efficiency} ($\pm0.001$) confirm that the crossover is
+statistically significant rather than a fluctuation.
+
+The practical implication is direct: under a tight Monte-Carlo budget the
+simple, interpretable BDT is competitive with --- or preferable to --- the
+deep models, whereas the attention model only realises its advantage once
+$\gtrsim\!10^{4}$ jets are available, in line with its reported near-$10^{6}$-
+jet saturation \citep{qu2022particletransformer}.
 
 \begin{figure}[t]
 \centering
 \safefig[width=\linewidth]{learning_curves.pdf}
-\caption{Data-efficiency curves: test AUC (left) and background rejection at
-$\varepsilon_S=0.5$ (right) vs.\ training-set size.}
+\caption{Data-efficiency curves: test AUC (left, with $1\sigma$ bootstrap
+error bars) and background rejection at $\varepsilon_S=0.5$ (right) vs.\
+training-set size. The Particle Transformer crosses from worst to best.}
 \label{fig:learning}
 \end{figure}
 
 \begin{table}[t]
 \centering
 \caption{Test AUC versus training-set size $N_{\text{train}}$. Uncertainties
-are one standard deviation from a $200$-sample bootstrap of the test set. The
-Particle Transformer is weakest at $5\times10^{3}$ jets and strongest at
-$5\times10^{4}$, crossing the BDT and ParticleNet.}
+are one standard deviation from a $200$-sample bootstrap of the test set.}
 \label{tab:efficiency}
 \small
 \setlength{\tabcolsep}{5pt}
@@ -441,31 +495,47 @@ Particle Transformer & 0.949$\pm$0.001 & 0.952$\pm$0.001 & 0.966$\pm$0.001 & 0.9
 \end{table}
 
 \subsection{Probability calibration}
-Following \citet{guo2017calibration} we compute the Expected Calibration
-Error (ECE) over $15$ score bins and fit a single temperature $T$ on the
-validation set. Figure~\ref{fig:calib} and Table~\ref{tab:calib} show that
-all models are mildly over-confident ($T>1$) but to very different degrees.
-Strikingly, ranking and calibration are \emph{decoupled}: the jet-image CNN
-is the worst-calibrated by an order of magnitude (ECE $=0.078$) despite
-ranking third on AUC, whereas the top-ranked Particle Transformer is
-comparatively well-calibrated (ECE $=0.012$). Temperature scaling brings the
-BDT, ParticleNet and transformer to ECE $\lesssim0.008$ but only halves the
-CNN's error (to $0.064$): the CNN's miscalibration is structural and would
-require a richer recalibration such as isotonic regression
-\citep{niculescu2005calibration}.
+\label{sec:res-calibration}
+Figure~\ref{fig:calib} and Table~\ref{tab:calib} report the calibration at
+the $5\times10^{4}$-jet endpoint. All four models are mildly over-confident
+(every fitted temperature satisfies $T>1$), as is typical of modern
+classifiers \citep{guo2017calibration}, but to very different degrees.
+Strikingly, ranking power and calibration are \emph{decoupled}. The jet-image
+CNN is the worst-calibrated model by an order of magnitude
+($\mathrm{ECE}=0.078$, $T=1.54$) despite ranking third on AUC, while the
+top-ranked Particle Transformer is comparatively well-calibrated
+($\mathrm{ECE}=0.012$) and the BDT and ParticleNet are already excellent
+($\mathrm{ECE}\approx0.007$). The reliability diagram for the CNN sags well
+below the diagonal across the mid-score range, the signature of a model that
+reports probabilities systematically higher than the empirical positive rate.
+
+We attribute the CNN's miscalibration to its representation: pixelisation
+discards angular information, after which the network fits a sharp decision
+boundary that piles scores towards $0$ and $1$ (visible in the bottom row of
+Fig.~\ref{fig:calib}), inflating confidence without a matching gain in
+accuracy. Temperature scaling --- a single global parameter --- brings the
+BDT, ParticleNet and Particle Transformer to $\mathrm{ECE}\lesssim0.008$
+essentially for free, but only halves the CNN's error (to $0.064$): because
+the CNN's distortion is shape-dependent rather than a uniform over-confidence,
+a single temperature cannot remove it, and a richer non-parametric
+recalibration such as isotonic regression \citep{niculescu2005calibration}
+would be required. For downstream analyses that treat the tagger score as a
+probability, this means temperature-scaled outputs are safe for three of the
+four models but the raw CNN score should not be used as a probability.
 
 \begin{figure}[t]
 \centering
 \safefig[width=\linewidth]{calibration.pdf}
-\caption{Reliability diagrams (top) and score histograms (bottom). Solid:
-raw scores; dotted: temperature-scaled. The CNN deviates most.}
+\caption{Reliability diagrams (top; solid: raw scores, dotted:
+temperature-scaled) and score histograms (bottom) for the four models. The
+jet-image CNN deviates most strongly from the diagonal.}
 \label{fig:calib}
 \end{figure}
 
 \begin{table}[t]
 \centering
 \caption{Calibration at the $5\times10^{4}$-jet endpoint: ECE, fitted
-temperature $T$, and ECE after rescaling.}
+temperature $T$, and ECE after temperature rescaling ($\mathrm{ECE}_T$).}
 \label{tab:calib}
 \small
 \begin{tabular}{lccc}
@@ -481,20 +551,83 @@ Particle Transformer & 0.012 & 1.12 & 0.007 \\
 \end{table}
 
 \subsection{Interpretability}
-The class-token attention of the Particle Transformer
-(Fig.~\ref{fig:clsattn}) concentrates at small angular distance $\Delta R$
-for QCD jets (a single core) but spreads to large $\Delta R$ for top jets,
-reflecting the broader multi-prong energy flow of the top decay. The BDT
-feature importances are dominated by the jet mass, $\tau_{32}$ and
-multiplicity, the physically expected discriminators.
+\label{sec:res-interpret}
+Two complementary views explain \emph{why} the models discriminate. For the
+BDT, the gain-based feature importance (Fig.~\ref{fig:bdtimp}) is dominated by
+the jet mass (gain $118$), the $1$-subjettiness $\tau_1$ ($89$) and the jet
+width ($76$), with the constituent multiplicity next ($15$) --- all
+observables that respond to the larger mass, girth and prong count of top
+jets, confirming that the tagger keys on physically meaningful structure
+rather than artefacts. Notably, the canonical ratio $\tau_{32}$ ranks lower
+(gain $7$): the boosted trees capture most of the prong information through
+the \emph{absolute} $\tau_1$ and the jet width rather than through the ratio,
+even though $\tau_{32}$ is the cleaner discriminant at the distribution level
+(Fig.~\ref{fig:substructure}).
+
+For the Particle Transformer, the learned class-token attention
+(Fig.~\ref{fig:clsattn}) concentrates at small angular distance
+$\Delta R\!\lesssim\!1$ for QCD jets, consistent with a single dominant prong,
+but spreads out to $\Delta R\!\sim\!3$--$4$ for top jets, mirroring the
+broader, multi-pronged energy flow of the $t\rightarrow Wb\rightarrow
+q\bar{q}'b$ decay. The model has thus learned to attend to the peripheral
+radiation that carries the top signature. The per-layer self-attention maps
+(Fig.~\ref{fig:attnmaps}) show structured off-diagonal correlations among the
+hardest constituents, in contrast to the diffuse patterns of QCD jets,
+indicating that the interaction-bias term of Eq.~\eqref{eq:part-attention} is
+being used to relate physically connected particles.
+
+\begin{figure}[t]
+\centering
+\safefig[width=0.78\linewidth]{bdt_importance.pdf}
+\caption{Gain-based BDT feature importance. The jet mass, $\tau_1$ and jet
+width dominate, followed by the constituent multiplicity.}
+\label{fig:bdtimp}
+\end{figure}
 
 \begin{figure}[t]
 \centering
 \safefig[width=\linewidth]{cls_attention.pdf}
-\caption{Class-token attention vs.\ constituent $\Delta R$ for top jets
-(left) and QCD jets (right).}
+\caption{Class-token attention weight vs.\ constituent angular distance
+$\Delta R$ from the jet axis, for top jets (left) and QCD jets (right).}
 \label{fig:clsattn}
 \end{figure}
+
+\begin{figure}[t]
+\centering
+\safefig[width=0.92\linewidth]{attention_maps.pdf}
+\caption{Head-averaged self-attention maps of the Particle Transformer across
+the encoder layers for representative top jets; padded positions appear as
+uniform blocks.}
+\label{fig:attnmaps}
+\end{figure}
+
+\subsection{Discussion}
+\label{sec:res-discussion}
+Taken together, the three analyses give a more complete picture of these
+taggers than an AUC table alone. First, the headline ranking is robust but
+its \emph{margins are budget-dependent}: at $5\times10^{4}$ jets the spread
+between the best and worst model is only $\sim\!0.008$ in AUC, and the
+data-efficiency sweep shows this spread opening up only as data grows. The
+crossover near $N_{\text{train}}\approx2.5\times10^{4}$ quantifies a
+trade-off that is rarely stated explicitly: the value of a high-capacity
+model is conditional on the available simulation statistics. Second, the
+calibration results caution against equating ranking power with reliability
+--- the CNN, third on AUC, is by far the least trustworthy as a probability,
+and this would directly bias a likelihood-based measurement that consumed its
+raw score. Third, the interpretability analysis confirms that both the
+classical and the attention model exploit the same underlying physics (jet
+mass, subjettiness/width and multiplicity), which lends confidence that the
+learned discriminators are not artefacts of the simulation.
+
+These findings are consistent with, and extend, the community comparison of
+\citet{kasieczka2019landscape}: we reproduce its ordering on a far smaller
+budget and add the orthogonal axes of data efficiency and calibration. The
+main limitations are the reduced training-set size and model capacity (chosen
+for reproducibility on free hardware), the absence of pile-up and detector
+systematics in the reference sample, and the use of a single representative
+configuration per architecture rather than an exhaustive hyper-parameter
+scan. Each is a natural target for the follow-up work outlined in
+Section~\ref{sec:conclusions}.
 
 %% =====================================================================
 \section{Conclusions}
